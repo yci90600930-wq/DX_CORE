@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self'; connect-src 'self' https://*.supabase.co wss://*.supabase.co; img-src 'self' data:; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests"
+    />
+    <meta
+      name="description"
+      content="제조업을 위한 정부지원사업 통합 검색 서비스, DX CORE 정부 지원사업 알리미"
+    />
+    <title>DX CORE 정부 지원사업 알리미</title>
+    <link rel="stylesheet" href="assets/css/styles.css" />
+    <script
+      src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2"
+      integrity="sha384-B2duOBIryCXbX4eDE4BdJwtNkQMRQde3o6IsjfPW28E6aH1CYE96hHeZRG3zY56O"
+      crossorigin="anonymous"
+      defer
+    ></script>
+    <script src="assets/js/supabase-config.js" defer></script>
+    <script src="assets/js/auth.js" defer></script>
+    <script src="assets/js/light-rays.js" defer></script>
+    <script src="assets/js/text-loop.js" defer></script>
+    <script src="assets/js/app.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">본문 바로가기</a>
+
+    <header class="site-header">
+      <div class="header-inner">
+        <a class="brand" href="#" aria-label="DX CORE 정부 지원사업 알리미 홈">
+          <span class="brand-mark" aria-hidden="true">DX</span>
+          <span class="brand-copy">
+            <strong id="brand-text-loop" class="text-loop">DX CORE</strong>
+            <span>정부 지원사업 알리미</span>
+          </span>
+        </a>
+        <div class="header-actions">
+          <span class="source-status"><i aria-hidden="true"></i> 4개 기관 통합 조회</span>
+          <a class="text-link" href="#service-guide">이용안내</a>
+          <a id="auth-open-button" class="auth-open-button" href="login.html">로그인</a>
+          <div id="account-status" class="account-status" hidden>
+            <span id="account-email"></span>
+            <button id="signout-button" type="button">로그아웃</button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main id="main-content">
+      <section id="home-view" class="home-view">
+        <div class="hero-shell">
+          <div id="hero-light-rays" class="light-rays-container custom-rays" aria-hidden="true"></div>
+          <div class="hero-content">
+            <p class="eyebrow"><span aria-hidden="true">●</span> 오늘의 지원 기회를 한눈에</p>
+            <h1>우리 회사에 맞는 지원사업,<br /><em>찾는 시간부터 줄이세요.</em></h1>
+            <p class="hero-description">
+              흩어진 정부지원사업 공고를 한곳에서 검색하고<br class="desktop-break" />
+              관심 키워드와 맞는 새 공고만 빠르게 확인하세요.
+            </p>
+          </div>
+
+          <aside class="hero-summary" aria-label="오늘 공고 요약">
+            <div class="summary-heading">
+              <span class="live-badge">LIVE</span>
+              <span id="today-label">오늘</span>
+            </div>
+            <strong><span id="hero-new-count">0</span>개의 새 공고</strong>
+            <p>전날 00시부터 지금까지 등록</p>
+            <div class="source-logos" aria-label="조회 대상 기관">
+              <button type="button" data-source="mss" aria-pressed="false">
+                <span><strong>중기부</strong><small><b data-source-count="mss">0</b>개 진행 중</small></span>
+              </button>
+              <button type="button" data-source="semas" aria-pressed="false">
+                <span><strong>소진공</strong><small><b data-source-count="semas">0</b>개 진행 중</small></span>
+              </button>
+              <button type="button" data-source="bizinfo" aria-pressed="false">
+                <span><strong>기업마당</strong><small><b data-source-count="bizinfo">0</b>개 진행 중</small></span>
+              </button>
+              <button type="button" data-source="smart" aria-pressed="false">
+                <span><strong>스마트공장</strong><small><b data-source-count="smart">0</b>개 진행 중</small></span>
+              </button>
+            </div>
+          </aside>
+        </div>
+
+        <section class="search-workspace" aria-labelledby="search-heading">
+          <div class="workspace-topline">
+            <div>
+              <p class="section-kicker">관심 키워드</p>
+              <h2 id="search-heading">관심 사업을 검색하세요</h2>
+            </div>
+            <p id="data-status" class="demo-notice" role="status" aria-live="polite">
+              <span aria-hidden="true">i</span> 공식 공고 연결을 준비하고 있습니다
+            </p>
+          </div>
+
+          <div class="preference-grid">
+            <div class="preference-panel">
+              <div class="panel-title-row">
+                <div>
+                  <h3><span class="panel-icon bookmark-icon" aria-hidden="true"></span> 관심 키워드</h3>
+                  <p>저장한 키워드와 맞는 오늘 공고와 통합 공고를 보여드립니다.</p>
+                </div>
+                <span id="keyword-storage-badge" class="temporary-badge">이 페이지에서만 저장</span>
+              </div>
+
+              <form id="keyword-form" class="keyword-form">
+                <label class="sr-only" for="keyword-input">관심 키워드 입력</label>
+                <input
+                  id="keyword-input"
+                  type="text"
+                  autocomplete="off"
+                  placeholder="키워드를 입력하세요"
+                />
+                <button type="submit">저장</button>
+              </form>
+              <div id="saved-keywords" class="saved-keywords" aria-live="polite"></div>
+              <div class="suggested-keywords" aria-label="추천 관심 키워드">
+                <span>추천</span>
+                <button type="button" data-keyword="스마트공장"># 스마트공장</button>
+                <button type="button" data-keyword="자동화"># 자동화</button>
+                <button type="button" data-keyword="정책자금"># 정책자금</button>
+              </div>
+            </div>
+
+            <div class="refresh-panel">
+              <div class="panel-title-row">
+                <div>
+                  <h3><span class="panel-icon refresh-icon" aria-hidden="true">↻</span> 공고 갱신</h3>
+                  <p>새 공고를 확인할 간격을 선택하세요.</p>
+                </div>
+                <span id="refresh-state" class="refresh-state">자동 갱신 중</span>
+              </div>
+              <label for="refresh-interval">갱신 주기</label>
+              <div class="select-wrap">
+                <select id="refresh-interval">
+                  <option value="30">30분마다</option>
+                  <option value="60">60분마다</option>
+                  <option value="90">90분마다</option>
+                  <option value="120">120분마다</option>
+                </select>
+              </div>
+              <p class="next-refresh"><span aria-hidden="true">◷</span> <span id="next-refresh-label">다음 확인 시각 계산 중</span></p>
+            </div>
+          </div>
+
+          <form id="search-form" class="primary-search" role="search">
+            <label class="sr-only" for="search-input">공고 제목 또는 본문 핵심 키워드 검색</label>
+            <span class="search-icon" aria-hidden="true"></span>
+            <input
+              id="search-input"
+              type="search"
+              autocomplete="off"
+              placeholder="예: 스마트공장, 자동화, 정책자금"
+            />
+            <button type="submit">검색 <span aria-hidden="true">→</span></button>
+          </form>
+          <p class="search-hint">여러 단어는 쉼표로 구분하세요. 제목 또는 본문에 한 단어만 포함되어도 표시합니다.</p>
+        </section>
+
+        <section class="results-section" aria-labelledby="results-title">
+          <div class="results-toolbar">
+            <div>
+              <p id="results-eyebrow" class="section-kicker">맞춤 신규 공고</p>
+              <div class="results-heading-row">
+                <h2 id="results-title">오늘의 신규 공고</h2>
+                <span id="result-count" class="count-badge">0</span>
+              </div>
+            </div>
+            <div class="toolbar-meta">
+              <p id="period-label" class="period-label"></p>
+            </div>
+          </div>
+
+          <div id="active-filters" class="active-filters" hidden></div>
+          <div id="result-list" class="result-list" aria-live="polite"></div>
+
+          <div id="empty-state" class="empty-state" hidden>
+            <span class="empty-icon" aria-hidden="true"></span>
+            <h3>조건에 맞는 공고를 찾지 못했어요</h3>
+            <p>검색어를 줄이거나 다른 표현으로 다시 검색해 보세요.</p>
+            <button id="empty-reset" type="button">오늘 공고 전체 보기</button>
+          </div>
+        </section>
+
+        <section class="open-notices-section" aria-labelledby="open-notices-title">
+          <div class="open-notices-intro">
+            <div>
+              <p class="section-kicker">접수 기회 전체 보기</p>
+              <div class="results-heading-row">
+                <h2 id="open-notices-title">마감되지 않은 전체 공고</h2>
+                <span id="open-notice-count" class="count-badge">0</span>
+              </div>
+            </div>
+            <p class="open-notices-description">
+              관심 키워드가 하나라도 포함된 공고를 통합하고<br class="desktop-break" />
+              접수 마감이 가까운 순서로 보여드립니다.
+            </p>
+          </div>
+          <div class="integrated-toolbar">
+            <div id="open-active-filters" class="active-filters" hidden></div>
+            <button id="clear-search" class="clear-search" type="button" hidden>검색 초기화</button>
+          </div>
+          <div class="open-notices-rule">
+            <span aria-hidden="true">✓</span>
+            <p><strong>접수기간 기준</strong> 오늘이 접수 종료일을 지나지 않은 통합 공고만 표시합니다.</p>
+          </div>
+          <div id="open-notice-list" class="result-list open-notice-list" aria-live="polite"></div>
+          <div id="open-notice-empty" class="empty-state" hidden>
+            <span class="empty-icon" aria-hidden="true"></span>
+            <h3>현재 접수 가능한 공고가 없어요</h3>
+            <p>다음 공고 갱신 때 새로운 모집 정보를 다시 확인해 주세요.</p>
+          </div>
+        </section>
+
+        <section id="service-guide" class="service-guide" aria-labelledby="guide-title">
+          <div>
+            <p class="section-kicker">조회 기준</p>
+            <h2 id="guide-title">결과를 이렇게 정리해요</h2>
+          </div>
+          <ol class="guide-list">
+            <li><span>01</span><p><strong>4개 기관 통합</strong>중기부·소진공·기업마당·스마트공장 공고를 함께 봅니다.</p></li>
+            <li><span>02</span><p><strong>중복 공고는 하나로</strong>제목과 접수 기간이 같으면 하나의 사업으로 통합합니다.</p></li>
+            <li><span>03</span><p><strong>제목과 본문만 검색</strong>첨부파일 내용은 검색 결과 판단에 사용하지 않습니다.</p></li>
+          </ol>
+        </section>
+      </section>
+
+      <section id="detail-view" class="detail-view" hidden aria-labelledby="detail-title">
+        <div class="detail-shell">
+          <button id="back-button" class="back-button" type="button"><span aria-hidden="true">←</span> 공고 목록으로</button>
+          <div id="detail-content"></div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div>
+        <p><strong>DX CORE</strong> 정부 지원사업 알리미</p>
+        <p>정확한 접수 정보와 변경 사항은 반드시 각 기관의 원문 공고에서 확인해 주세요.</p>
+      </div>
+      <p>Prototype · 2026</p>
+    </footer>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+    <template id="result-card-template">
+      <article class="notice-card">
+        <button class="notice-card-button" type="button">
+          <div class="notice-card-top">
+            <div class="notice-badges"></div>
+            <span class="registered-date"></span>
+          </div>
+          <h3 class="notice-title"></h3>
+          <p class="notice-summary"></p>
+          <div class="notice-meta">
+            <dl>
+              <div><dt>주관 부처</dt><dd class="notice-ministry"></dd></div>
+              <div><dt>접수 기간</dt><dd class="notice-period"></dd></div>
+              <div><dt>접수 사이트</dt><dd class="notice-apply"></dd></div>
+            </dl>
+            <span class="card-arrow">사업 보러가기 <span aria-hidden="true">→</span></span>
+          </div>
+        </button>
+      </article>
+    </template>
+  </body>
+</html>
