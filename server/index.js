@@ -24,12 +24,6 @@ function withSecurityHeaders(response) {
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }
 
-function cacheableApiResponse(response) {
-  const headers = new Headers(response.headers);
-  headers.set("cache-control", "public, max-age=300");
-  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
-}
-
 function cleanText(value) {
   return String(value ?? "")
     .replace(/<[^>]*>/g, " ")
@@ -406,19 +400,7 @@ export default {
     if (!["GET", "HEAD"].includes(request.method)) return new Response("Method Not Allowed", { status: 405 });
     if (url.pathname === "/api/notices") {
       if (request.method !== "GET") return new Response(null, { status: 405 });
-      const shouldRefresh = url.searchParams.get("refresh") === "1";
-      const cache = globalThis.caches?.default;
-      const cacheKey = new Request(new URL("/api/notices", request.url), { method: "GET" });
-      if (!shouldRefresh && cache) {
-        const cached = await cache.match(cacheKey);
-        if (cached) return cached;
-      }
-      const response = await fetchNotices(env);
-      if (response.ok && cache) {
-        const cacheable = cacheableApiResponse(response.clone());
-        await cache.put(cacheKey, cacheable);
-      }
-      return response;
+      return fetchNotices(env);
     }
     if (url.pathname === "/assets/js/supabase-config.js") return runtimeConfig(request, env);
 
