@@ -1,0 +1,16 @@
+# 운영체제 및 편집기 임시 파일
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# 로컬 환경 변수와 비밀 정보
+.env
+.env.*
+!.env.example
+
+# 로그 및 임시 백업 파일
+*.log
+*.tmp
+*.bak
+*~

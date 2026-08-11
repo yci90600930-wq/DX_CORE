@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="DX CORE 정부 지원사업 알리미 계정 로그인" />
+    <title>로그인 | DX CORE 정부 지원사업 알리미</title>
+    <link rel="stylesheet" href="assets/css/styles.css" />
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+    <script src="assets/js/supabase-config.js" defer></script>
+    <script src="assets/js/auth.js" defer></script>
+    <script src="assets/js/login.js" defer></script>
+  </head>
+  <body class="login-page">
+    <a class="skip-link" href="#login-main">본문 바로가기</a>
+
+    <header class="login-header">
+      <div class="login-header-inner">
+        <a class="brand" href="index.html" aria-label="DX CORE 정부 지원사업 알리미 홈">
+          <span class="brand-mark" aria-hidden="true">DX</span>
+          <span class="brand-copy">
+            <strong>DX CORE</strong>
+            <span>정부 지원사업 알리미</span>
+          </span>
+        </a>
+        <a class="login-back-link" href="index.html"><span aria-hidden="true">←</span> 공고로 돌아가기</a>
+      </div>
+    </header>
+
+    <main id="login-main" class="login-main">
+      <section class="login-card" aria-labelledby="auth-title">
+        <p class="section-kicker">계정</p>
+        <h1 id="auth-title">로그인</h1>
+        <p id="auth-description" class="auth-description">계정에 저장한 관심 키워드를 불러옵니다.</p>
+
+        <form id="auth-form" class="auth-form">
+          <label id="auth-email-field" class="auth-field" for="auth-email">
+            <span>이메일</span>
+            <input id="auth-email" type="email" autocomplete="email" required placeholder="name@example.com" />
+          </label>
+          <label class="auth-field" for="auth-password">
+            <span id="auth-password-label">비밀번호</span>
+            <input id="auth-password" type="password" autocomplete="current-password" minlength="8" required placeholder="8자 이상 입력" />
+          </label>
+          <button id="auth-submit-button" class="auth-submit-button" type="submit">로그인</button>
+        </form>
+
+        <p id="auth-message" class="auth-message" role="status" aria-live="polite"></p>
+        <div id="auth-secondary-actions" class="auth-secondary-actions">
+          <button id="auth-mode-button" type="button">회원가입</button>
+          <button id="password-reset-button" type="button">비밀번호 재설정</button>
+        </div>
+        <p class="auth-temporary-note">로그인 전에 임시 저장한 관심 키워드는 계정에 합쳐지지 않습니다.</p>
+      </section>
+    </main>
+  </body>
+</html>
