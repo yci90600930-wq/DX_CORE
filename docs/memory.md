@@ -187,3 +187,16 @@
 - 기업마당 전체 공고를 추가하려면 `BIZINFO_API_KEY`를 Sites Secret 환경 변수로 등록해야 합니다.
 - 회원가입·로그인에는 `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, RLS 적용과 운영 Redirect URL이 필요합니다.
 - 첫 Sites 배포 후 정적 `ASSETS` 바인딩과 운영 URL에서 실제 화면·모바일·인증 흐름을 최종 확인해야 합니다.
+
+## 2026-08-11 15:20:26 KST
+
+### Sites 운영 배포
+
+- 검증된 `dist` 배포물을 Sites 버전 1로 저장하고 비공개 우선 배포 절차를 완료했습니다.
+- 운영 주소는 `https://dx-core-support-notices.yci90600930.chatgpt.site`입니다.
+- 중기부·소진공·스마트공장 실제 공고 조회가 가능한 제한 운영판이며, 기업마당 API와 Supabase 인증은 환경 값이 없어 아직 비활성 상태입니다.
+- 배포 전 원본과 `dist` 해시, JavaScript 문법, 공개 파일 범위와 비밀키 미포함 여부를 다시 확인했습니다.
+
+### 확인 필요
+
+- `BIZINFO_API_KEY`, `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, RLS와 Redirect URL을 등록한 뒤 전체 기능 배포가 필요합니다.
