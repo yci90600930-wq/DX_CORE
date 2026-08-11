@@ -18,7 +18,7 @@
 
 ## 3. 공개 연결 정보 입력
 
-Supabase Dashboard의 API 설정에서 Project URL과 Publishable key를 복사해 `assets/js/supabase-config.js`에 입력합니다.
+로컬 파일 확인용으로는 Supabase Dashboard의 API 설정에서 Project URL과 Publishable key를 복사해 `assets/js/supabase-config.js`에 입력합니다.
 
 ```js
 window.DX_SUPABASE_CONFIG = Object.freeze({
@@ -27,6 +27,13 @@ window.DX_SUPABASE_CONFIG = Object.freeze({
   redirectUrl: "https://실제-배포-주소/login.html",
 });
 ```
+
+Sites 운영 환경에서는 파일에 값을 저장하지 않고 다음 공개 환경 변수로 설정합니다. `server/index.js`가 브라우저용 설정 파일을 실행 시점에 생성합니다.
+
+- `SUPABASE_URL`: `https://프로젝트-ref.supabase.co`
+- `SUPABASE_PUBLISHABLE_KEY`: `sb_publishable_`로 시작하는 Publishable key
+
+Secret key와 `service_role` key는 브라우저 설정이나 Git 저장소에 넣지 않습니다.
 
 브라우저 코드에는 Publishable key만 사용합니다. Secret key와 service_role key는 절대 입력하지 않습니다.
 
