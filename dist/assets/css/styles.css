@@ -456,6 +456,104 @@ span {
   border-top-color: var(--teal);
 }
 
+.region-filter-panel {
+  position: relative;
+  z-index: 1;
+  grid-column: 1 / -1;
+  min-width: 0;
+  width: 100%;
+  padding: 20px;
+  color: var(--navy);
+  background: var(--soft);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  text-align: center;
+}
+
+.region-filter-heading {
+  margin: 0;
+  color: var(--navy);
+  overflow-wrap: anywhere;
+}
+
+.region-filter-heading h2 {
+  margin: 0;
+  color: var(--navy);
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.4;
+}
+
+.region-filter-heading p,
+.region-filter-description {
+  max-width: 100%;
+  margin: 5px 0 0;
+  color: var(--navy);
+  font-size: 10px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.region-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  justify-content: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+  margin-top: 14px;
+}
+
+.region-filters button {
+  display: inline-flex;
+  flex: 0 1 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 88px;
+  max-width: 100%;
+  min-height: 38px;
+  padding: 7px 12px;
+  overflow-wrap: anywhere;
+  color: var(--navy);
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.3;
+  text-align: center;
+  white-space: normal;
+}
+
+.region-filters button:hover,
+.region-filters button:focus-visible {
+  color: var(--teal);
+  border-color: var(--teal);
+}
+
+.region-filters button:focus-visible {
+  outline: 2px solid var(--teal);
+  outline-offset: 2px;
+}
+
+.region-filters button[aria-pressed="true"] {
+  color: var(--white);
+  background: var(--teal);
+  border-color: var(--teal);
+}
+
+.region-filters button small,
+.region-filters button [data-region-count] {
+  flex: 0 0 auto;
+  color: inherit;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .source-logos button,
   .source-logos button > span {
@@ -1850,6 +1948,19 @@ input::placeholder {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .region-filter-panel {
+    padding: 17px 12px;
+  }
+
+  .region-filters {
+    gap: 7px;
+  }
+
+  .region-filters button {
+    flex: 1 1 104px;
+    min-width: 0;
+  }
+
   .results-section {
     margin-top: 34px;
   }
@@ -2056,6 +2167,20 @@ input::placeholder {
   .panel-title-row {
     flex-direction: column;
     gap: 8px;
+  }
+
+  .region-filter-panel {
+    padding: 15px 10px;
+  }
+
+  .region-filters {
+    gap: 6px;
+  }
+
+  .region-filters button {
+    flex-basis: 94px;
+    padding: 7px 8px;
+    font-size: 9px;
   }
 
   .page-size-control {

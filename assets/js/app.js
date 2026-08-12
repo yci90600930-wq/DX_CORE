@@ -21,6 +21,28 @@ const REGION_CATALOG = new Set([
   "경기", "강원", "충북", "충남", "전북", "전남", "경북", "경남", "제주",
 ]);
 
+const REGION_FILTER_CATALOG = {
+  all: "전체",
+  nationwide: "전국",
+  seoul: "서울",
+  busan: "부산",
+  daegu: "대구",
+  incheon: "인천",
+  gwangju: "광주",
+  daejeon: "대전",
+  ulsan: "울산",
+  sejong: "세종",
+  gyeonggi: "경기",
+  gangwon: "강원",
+  chungbuk: "충북",
+  chungnam: "충남",
+  jeonbuk: "전북",
+  jeonnam: "전남",
+  gyeongbuk: "경북",
+  gyeongnam: "경남",
+  jeju: "제주",
+};
+
 const minute = 60 * 1000;
 const hour = 60 * minute;
 const NOTICE_API_URL = window.location.protocol === "file:"
@@ -34,6 +56,7 @@ const state = {
   searchKeywords: [],
   currentUser: null,
   selectedCategory: null,
+  selectedRegion: null,
   refreshMinutes: 30,
   nextRefreshAt: null,
   refreshTimer: null,
@@ -67,6 +90,7 @@ const elements = {
   heroNewCount: document.querySelector("#hero-new-count"),
   todayLabel: document.querySelector("#today-label"),
   categoryFilters: document.querySelector(".source-logos"),
+  regionFilters: document.querySelector("#region-filters"),
   activeFilters: document.querySelector("#active-filters"),
   openActiveFilters: document.querySelector("#open-active-filters"),
   emptyState: document.querySelector("#empty-state"),
@@ -143,9 +167,20 @@ function matchesSelectedCategory(notice) {
   return !state.selectedCategory || getCategoryKey(notice) === state.selectedCategory;
 }
 
+function matchesSelectedRegion(notice) {
+  if (!state.selectedRegion) return true;
+  if (state.selectedRegion === "nationwide") {
+    return notice.regions.length === 1 && notice.regions[0] === "전국";
+  }
+  return notice.regions.includes(REGION_FILTER_CATALOG[state.selectedRegion]);
+}
+
 function getVisibleNotices() {
   return notices.filter(
-    (notice) => isNewNotice(notice) && matchesSelectedCategory(notice) && matchesKeywords(notice, state.savedKeywords),
+    (notice) => isNewNotice(notice)
+      && matchesSelectedCategory(notice)
+      && matchesSelectedRegion(notice)
+      && matchesKeywords(notice, state.savedKeywords),
   );
 }
 
@@ -389,14 +424,17 @@ function renderResults() {
     elements.resultsTitle.textContent = "오늘의 신규 공고";
   }
 
-  const hasFilters = state.savedKeywords.length > 0 || state.selectedCategory;
+  const hasFilters = state.savedKeywords.length > 0 || state.selectedCategory || state.selectedRegion;
   elements.activeFilters.hidden = !hasFilters;
   if (hasFilters) {
     const categoryFilter = state.selectedCategory
       ? `<span>분류: ${escapeHtml(CATEGORY_CATALOG[state.selectedCategory])}</span>`
       : "";
-    const filterNote = state.savedKeywords.length ? "제목·본문 중 하나 이상 포함" : "선택 분류 공고만 표시";
-    elements.activeFilters.innerHTML = `<strong>적용 조건</strong>${categoryFilter}${state.savedKeywords
+    const regionFilter = state.selectedRegion
+      ? `<span>지역: ${escapeHtml(REGION_FILTER_CATALOG[state.selectedRegion])}</span>`
+      : "";
+    const filterNote = state.savedKeywords.length ? "제목·본문 중 하나 이상 포함" : "선택 조건 공고만 표시";
+    elements.activeFilters.innerHTML = `<strong>적용 조건</strong>${categoryFilter}${regionFilter}${state.savedKeywords
       .map((keyword) => `<span># ${escapeHtml(keyword)}</span>`)
       .join("")}<small>${filterNote}</small>`;
   } else {
@@ -415,7 +453,9 @@ function renderResults() {
 function renderOpenNotices() {
   const combinedKeywords = [...new Set([...state.savedKeywords, ...state.searchKeywords])];
   const availableNotices = getOpenNotices().filter(
-    ({ notice }) => matchesSelectedCategory(notice) && matchesKeywords(notice, combinedKeywords),
+    ({ notice }) => matchesSelectedCategory(notice)
+      && matchesSelectedRegion(notice)
+      && matchesKeywords(notice, combinedKeywords),
   );
   const page = getPage(availableNotices, state.openPagination);
   elements.openNoticeList.classList.add("compact-notice-list");
@@ -426,14 +466,17 @@ function renderOpenNotices() {
   elements.openNoticeList.hidden = availableNotices.length === 0;
   elements.clearSearch.hidden = state.searchKeywords.length === 0;
 
-  const hasFilters = combinedKeywords.length > 0 || state.selectedCategory;
+  const hasFilters = combinedKeywords.length > 0 || state.selectedCategory || state.selectedRegion;
   elements.openActiveFilters.hidden = !hasFilters;
   if (hasFilters) {
     const categoryFilter = state.selectedCategory
       ? `<span>분류: ${escapeHtml(CATEGORY_CATALOG[state.selectedCategory])}</span>`
       : "";
-    const filterNote = combinedKeywords.length ? "제목·본문 중 하나 이상 포함" : "선택 분류 공고만 표시";
-    elements.openActiveFilters.innerHTML = `<strong>적용 조건</strong>${categoryFilter}${combinedKeywords
+    const regionFilter = state.selectedRegion
+      ? `<span>지역: ${escapeHtml(REGION_FILTER_CATALOG[state.selectedRegion])}</span>`
+      : "";
+    const filterNote = combinedKeywords.length ? "제목·본문 중 하나 이상 포함" : "선택 조건 공고만 표시";
+    elements.openActiveFilters.innerHTML = `<strong>적용 조건</strong>${categoryFilter}${regionFilter}${combinedKeywords
       .map((keyword) => `<span># ${escapeHtml(keyword)}</span>`)
       .join("")}<small>${filterNote}</small>`;
   } else {
@@ -458,9 +501,10 @@ function renderPeriod() {
     weekday: "short",
   }).format(end);
   elements.heroNewCount.textContent = notices.filter(
-    (notice) => isNewNotice(notice) && matchesSelectedCategory(notice),
+    (notice) => isNewNotice(notice) && matchesSelectedCategory(notice) && matchesSelectedRegion(notice),
   ).length;
   renderCategoryCounts();
+  renderRegionCounts();
 }
 
 function setDataStatus(status, message) {
@@ -549,6 +593,36 @@ function renderCategoryCounts() {
   elements.categoryFilters.querySelectorAll("[data-category-count]").forEach((countElement) => {
     const category = countElement.dataset.categoryCount || "all";
     countElement.textContent = counts[category] ?? 0;
+  });
+}
+
+function renderRegionFilters() {
+  if (!elements.regionFilters) return;
+  elements.regionFilters.querySelectorAll("[data-region]").forEach((button) => {
+    const region = button.dataset.region;
+    const isAll = region === "all" || region === "";
+    button.setAttribute("aria-pressed", String(isAll ? !state.selectedRegion : region === state.selectedRegion));
+  });
+}
+
+function renderRegionCounts() {
+  if (!elements.regionFilters) return;
+  const counts = Object.fromEntries(Object.keys(REGION_FILTER_CATALOG).map((regionKey) => [regionKey, 0]));
+
+  getOpenNotices().forEach(({ notice, status }) => {
+    if (status.className === "upcoming" || !matchesSelectedCategory(notice)) return;
+    counts.all += 1;
+    if (notice.regions.length === 1 && notice.regions[0] === "전국") counts.nationwide += 1;
+    Object.entries(REGION_FILTER_CATALOG).forEach(([regionKey, label]) => {
+      if (regionKey !== "all" && regionKey !== "nationwide" && notice.regions.includes(label)) {
+        counts[regionKey] += 1;
+      }
+    });
+  });
+
+  elements.regionFilters.querySelectorAll("[data-region-count]").forEach((countElement) => {
+    const region = countElement.dataset.regionCount || "all";
+    countElement.textContent = counts[region] ?? 0;
   });
 }
 
@@ -758,6 +832,41 @@ elements.categoryFilters.addEventListener("keydown", (event) => {
   buttons[nextIndex].focus();
 });
 
+elements.regionFilters?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-region]");
+  if (!button) return;
+  const region = button.dataset.region;
+  if (region !== "all" && region !== "" && !REGION_FILTER_CATALOG[region]) return;
+  const nextRegion = region === "all" || region === "" ? null : region;
+  state.selectedRegion = state.selectedRegion === nextRegion ? null : nextRegion;
+  resetPagination();
+  renderRegionFilters();
+  renderResults();
+  renderOpenNotices();
+  renderPeriod();
+  const label = state.selectedRegion
+    ? `${REGION_FILTER_CATALOG[state.selectedRegion]} 지역 공고만 표시합니다.`
+    : "전체 지역 공고를 표시합니다.";
+  showToast(label);
+  document.querySelector(".results-section").scrollIntoView({ behavior: "smooth", block: "start" });
+});
+
+elements.regionFilters?.addEventListener("keydown", (event) => {
+  const buttons = [...elements.regionFilters.querySelectorAll("[data-region]")];
+  const currentIndex = buttons.indexOf(event.target.closest("[data-region]"));
+  if (currentIndex < 0) return;
+
+  let nextIndex = null;
+  if (event.key === "ArrowRight" || event.key === "ArrowDown") nextIndex = (currentIndex + 1) % buttons.length;
+  if (event.key === "ArrowLeft" || event.key === "ArrowUp") nextIndex = (currentIndex - 1 + buttons.length) % buttons.length;
+  if (event.key === "Home") nextIndex = 0;
+  if (event.key === "End") nextIndex = buttons.length - 1;
+  if (nextIndex === null) return;
+
+  event.preventDefault();
+  buttons[nextIndex].focus();
+});
+
 elements.savedKeywords.addEventListener("click", async (event) => {
   const button = event.target.closest("[data-remove-keyword]");
   if (!button) return;
@@ -842,6 +951,16 @@ elements.emptyReset.addEventListener("click", () => {
     showToast("전체 분류 공고를 표시합니다.");
     return;
   }
+  if (state.selectedRegion) {
+    state.selectedRegion = null;
+    resetPagination();
+    renderRegionFilters();
+    renderResults();
+    renderOpenNotices();
+    renderPeriod();
+    showToast("전체 지역 공고를 표시합니다.");
+    return;
+  }
   if (state.currentUser) {
     document.querySelector(".search-workspace").scrollIntoView({ behavior: "smooth", block: "start" });
     elements.keywordInput.focus();
@@ -878,6 +997,7 @@ window.addEventListener("hashchange", showDetailFromHash);
 
 renderPeriod();
 renderCategoryFilters();
+renderRegionFilters();
 renderSavedKeywords();
 renderResults();
 renderOpenNotices();
