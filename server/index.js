@@ -1,8 +1,11 @@
-const BIZINFO_API_URL = "https://www.bizinfo.go.kr/uss/rss/bizinfoApi.do";
-const MSS_LIST_URL = "https://www.mss.go.kr/site/smba/ex/bbs/List.do?cbIdx=310";
-const SEMAS_LIST_URL = "https://www.semas.or.kr/web/board/webBoardList.kmdc?bCd=2001&pNm=BOA0121";
-const SMART_LIST_URL = "https://www.smart-factory.kr/usr/bg/ba/ma/bsnsPbanc/selectBsnsPbancPage.do";
+const DATA_GO_API_URL = "https://apis.data.go.kr/1421000/bizinfo/pblancBsnsService";
+const DATA_GO_SOURCE_PAGE = "https://www.data.go.kr/data/15157820/openapi.do";
 const ALLOWED_STATIC_PATHS = new Set(["/index.html", "/login.html"]);
+const CACHE_TTL_MS = 5 * 60 * 1000;
+const PAGE_SIZE = 100;
+const PAGE_CONCURRENCY = 4;
+
+let noticeSnapshot = null;
 
 function jsonResponse(body, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -37,7 +40,7 @@ function cleanText(value) {
     .trim();
 }
 
-function safeHttpUrl(value, fallback = "https://www.bizinfo.go.kr/") {
+function safeHttpUrl(value, fallback = DATA_GO_SOURCE_PAGE) {
   try {
     const url = new URL(String(value ?? ""));
     return ["http:", "https:"].includes(url.protocol) ? url.href : fallback;
@@ -79,9 +82,7 @@ function toIsoDate(value) {
     const [, year, month, day, hours = "00", minutes = "00", seconds = "00"] = compactMatch;
     return new Date(`${year}-${month}-${day}T${hours}:${minutes}:${seconds}+09:00`).toISOString();
   }
-  const normalized = text
-    .replace(/^(\d{4})[.]?(\d{2})[.]?(\d{2})$/, "$1-$2-$3")
-    .replace(" ", "T");
+  const normalized = text.replace(" ", "T");
   const withZone = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(normalized) && !/[zZ]|[+-]\d{2}:?\d{2}$/.test(normalized)
     ? `${normalized}+09:00`
     : normalized;
@@ -89,295 +90,154 @@ function toIsoDate(value) {
   return Number.isNaN(date.getTime()) ? new Date(0).toISOString() : date.toISOString();
 }
 
-function getApiItems(payload) {
-  if (Array.isArray(payload)) return payload;
-  const jsonArray = payload?.jsonArray ?? payload;
-  if (Array.isArray(jsonArray)) return jsonArray;
-  const items = jsonArray?.item;
+function classifyCategory(item) {
+  const field = cleanText(item.pldirSportRealmLclasCodeNm);
+  const text = cleanText([
+    item.pblancNm,
+    item.bsnsSumryCn,
+    item.hashtags,
+    field,
+  ].join(" "));
+
+  if (/스마트\s*공장|스마트팩토리|스마트\s*제조|제조혁신|자율제조/i.test(text)) return "스마트공장";
+  if (/\bAI\b|인공지능|\bAX\b|제조\s*AI/i.test(text)) return "AI·AX";
+  if (/디지털\s*전환|\bDX\b/i.test(text)) return "DX";
+  if (/R\s*[&＆]\s*D|연구개발|기술개발/i.test(text)) return "R&D";
+  if (/정책\s*자금|융자|대출|보증|금융/i.test(text) || field === "금융") return "정책자금";
+  if (/수출|해외|글로벌|무역/i.test(text) || field === "수출") return "수출";
+  return "기타";
+}
+
+function getItems(body) {
+  const items = body?.items;
   if (Array.isArray(items)) return items;
+  if (Array.isArray(items?.item)) return items.item;
+  if (items?.item && typeof items.item === "object") return [items.item];
   return items && typeof items === "object" ? [items] : [];
 }
 
-function normalizeBizinfoNotice(item) {
-  const id = cleanText(item.pblancId || item.seq);
-  const title = cleanText(item.title || item.pblancNm);
-  const description = cleanText(item.description || item.bsnsSumryCn);
+function normalizeNotice(item) {
+  const id = cleanText(item.pblancId);
+  const title = cleanText(item.pblancNm);
+  const description = cleanText(item.bsnsSumryCn);
   const target = cleanText(item.trgetNm);
   const method = cleanText(item.reqstMthPapersCn);
-  const applicationPeriod = formatPeriod(item.reqstDt || item.reqstBeginEndDe);
-  const originalUrl = safeHttpUrl(item.link || item.pblancUrl);
+  const contact = cleanText(item.refrncNm);
+  const hashtags = cleanText(item.hashtags).split(",").map((tag) => tag.trim()).filter(Boolean);
+  const originalUrl = safeHttpUrl(item.pblancUrl);
   const applyUrl = safeHttpUrl(item.rceptEngnHmpgUrl, originalUrl);
   const attachmentFiles = [
     { name: cleanText(item.fileNm), url: safeHttpUrl(item.flpthNm, "") },
     { name: cleanText(item.printFileNm), url: safeHttpUrl(item.printFlpthNm, "") },
   ].filter((file) => file.name && file.url);
-  const attachments = [cleanText(item.fileNm), cleanText(item.printFileNm)].filter(Boolean);
 
   return {
     id: id || originalUrl,
     title,
-    summary: description.slice(0, 180) || "기업마당 원문 공고에서 사업 개요를 확인해 주세요.",
-    body: [description, target && `지원대상: ${target}`, method && `신청방법: ${method}`].filter(Boolean),
-    registeredAt: toIsoDate(item.pubDate || item.creatPnttm),
-    applicationPeriod,
-    ministry: cleanText(item.author || item.jrsdInsttNm) || "소관기관 확인 필요",
-    category: cleanText(item.lcategory || item.pldirSportRealmLclasCodeNm) || "기타",
-    sources: ["bizinfo"],
+    summary: description.slice(0, 180) || "공공데이터포털 원문 공고에서 사업 개요를 확인해 주세요.",
+    body: [
+      description,
+      target && `지원대상: ${target}`,
+      method && `신청방법: ${method}`,
+      contact && `문의처: ${contact}`,
+    ].filter(Boolean),
+    registeredAt: toIsoDate(item.creatPnttm),
+    updatedAt: toIsoDate(item.updtPnttm || item.creatPnttm),
+    applicationPeriod: formatPeriod(item.reqstBeginEndDe),
+    ministry: cleanText(item.jrsdInsttNm) || "소관기관 확인 필요",
+    agency: cleanText(item.excInsttNm),
+    category: classifyCategory(item),
+    sources: ["dataGoKr"],
     applyName: cleanText(item.excInsttNm) || "기업마당 원문 공고",
     applyUrl,
     originalUrl,
-    attachments: [...new Set(attachments)],
-    attachmentFiles: attachmentFiles.filter((file, index, files) => files.findIndex((item) => item.url === file.url) === index),
+    target,
+    contact,
+    hashtags,
+    attachments: attachmentFiles.map((file) => file.name),
+    attachmentFiles: attachmentFiles.filter((file, index, files) => files.findIndex((entry) => entry.url === file.url) === index),
   };
 }
 
-function parseMssRows(html) {
-  const notices = [];
-  const rowPattern = /<tr\b[^>]*onclick=["']doBbsFView\(["']310["'],["']([^"']+)["'][^>]*title=["']([^"']+)["'][^>]*>([\s\S]*?)<\/tr>/gi;
-  for (const match of html.matchAll(rowPattern)) {
-    const bcIdx = match[1];
-    const title = cleanText(match[2]);
-    const rowText = cleanText(match[3]);
-    const periodMatch = rowText.match(/신청기간\s*(\d{4}[.-]\d{2}[.-]\d{2}\s*~\s*\d{4}[.-]\d{2}[.-]\d{2}|상시|예산\s*소진[^\s]*)/);
-    const applicationPeriod = formatPeriod(periodMatch?.[1] ?? "");
-    const endKey = getPeriodEndKey(applicationPeriod);
-    if (!title || endKey === null || endKey < todayInSeoul()) continue;
-    const dateMatches = [...rowText.matchAll(/\b(\d{4}[.]\d{2}[.]\d{2})\b/g)];
-    const registeredAt = toIsoDate(dateMatches.at(-1)?.[1] ?? "");
-    const originalUrl = `https://www.mss.go.kr/site/smba/ex/bbs/View.do?cbIdx=310&bcIdx=${encodeURIComponent(bcIdx)}`;
-    notices.push({
-      id: `mss-${bcIdx}`,
-      title,
-      summary: "중소벤처기업부 원문 공고에서 세부 지원내용을 확인해 주세요.",
-      body: ["중소벤처기업부 공식 사업공고 목록에서 확인한 접수 가능 공고입니다."],
-      registeredAt,
-      applicationPeriod,
-      ministry: "중소벤처기업부",
-      category: "사업공고",
-      sources: ["mss"],
-      applyName: "중소벤처기업부 원문 공고",
-      applyUrl: originalUrl,
-      originalUrl,
-      attachments: [],
-      attachmentFiles: [],
-    });
+function normalizeServiceKey(value) {
+  const key = String(value ?? "").trim();
+  if (!key) throw new Error("DATA_GO_KR_API_KEY_MISSING");
+  if (!/%[0-9A-Fa-f]{2}/.test(key)) return key;
+  try {
+    return decodeURIComponent(key);
+  } catch {
+    return key;
   }
-  return notices;
 }
 
-async function fetchMssNotices() {
-  const notices = [];
-  const seenFirstIds = new Set();
-  let emptyActivePages = 0;
-  for (let page = 1; page <= 20 && emptyActivePages < 3; page += 1) {
-    const url = new URL(MSS_LIST_URL);
-    url.searchParams.set("pageIndex", String(page));
-    const response = await fetch(url, { headers: { Accept: "text/html" }, signal: AbortSignal.timeout(15000) });
-    if (!response.ok) throw new Error("MSS_UPSTREAM_ERROR");
-    const pageNotices = parseMssRows(await response.text());
-    const firstId = pageNotices[0]?.id;
-    if (firstId && seenFirstIds.has(firstId)) break;
-    if (firstId) seenFirstIds.add(firstId);
-    notices.push(...pageNotices);
-    emptyActivePages = pageNotices.length ? 0 : emptyActivePages + 1;
-  }
-  return notices;
-}
+async function fetchPage(apiKey, pageNo) {
+  const url = new URL(DATA_GO_API_URL);
+  url.searchParams.set("serviceKey", apiKey);
+  url.searchParams.set("dataType", "json");
+  url.searchParams.set("pageNo", String(pageNo));
+  url.searchParams.set("numOfRows", String(PAGE_SIZE));
 
-function extractHtmlClass(block, className, tagName = "(?:div|li|span)") {
-  const pattern = new RegExp(`<${tagName}[^>]*class=["'][^"']*\\b${className}\\b[^"']*["'][^>]*>([\\s\\S]*?)<\\/(?:div|li|span)>`, "i");
-  return cleanText(block.match(pattern)?.[1] ?? "");
-}
-
-function parseSemasCards(html) {
-  const cards = [];
-  const cardPattern = /<a\b(?=[^>]*class=["'][^"']*\baconbox\b)[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
-  for (const match of html.matchAll(cardPattern)) {
-    const originalUrl = safeHttpUrl(match[1], SEMAS_LIST_URL);
-    const block = match[2];
-    const title = extractHtmlClass(block, "cut_text1");
-    const applicationPeriod = formatPeriod(extractHtmlClass(block, "date"));
-    const endKey = getPeriodEndKey(applicationPeriod);
-    if (!title || endKey === null || endKey < todayInSeoul()) continue;
-    const id = originalUrl.match(/\/pbanc\/(\d+)/)?.[1] || originalUrl;
-    const summaryMatch = block.match(/class=["'][^"']*\btext\b[^"']*\bcut_text2\b[^"']*["'][^>]*>([\s\S]*?)(?=<li\b|<div[^>]*class=["'][^"']*date_box)/i);
-    const summary = cleanText(summaryMatch?.[1] ?? "");
-    cards.push({
-      id: `semas-${id}`,
-      title,
-      summary: summary || "소상공인시장진흥공단 원문에서 사업 개요를 확인해 주세요.",
-      body: [summary || "소상공인시장진흥공단이 제공한 실제 진행 공고입니다."],
-      registeredAt: new Date(0).toISOString(),
-      applicationPeriod,
-      ministry: "소상공인시장진흥공단",
-      category: "소상공인",
-      sources: ["semas"],
-      applyName: "소상공인24 원문 공고",
-      applyUrl: originalUrl,
-      originalUrl,
-      attachments: [],
-      attachmentFiles: [],
-    });
-  }
-  return cards;
-}
-
-async function fetchSemasNotices() {
-  const notices = [];
-  let emptyActivePages = 0;
-  for (let page = 1; page <= 20 && emptyActivePages < 3; page += 1) {
-    const url = new URL(SEMAS_LIST_URL);
-    url.searchParams.set("page", String(page));
-    const response = await fetch(url, {
-      headers: { Accept: "text/html" },
-      signal: AbortSignal.timeout(15000),
-    });
-    if (!response.ok) throw new Error("SEMAS_UPSTREAM_ERROR");
-    const pageNotices = parseSemasCards(await response.text());
-    notices.push(...pageNotices);
-    emptyActivePages = pageNotices.length ? 0 : emptyActivePages + 1;
-  }
-  return notices;
-}
-
-async function postSmartFactory(body) {
-  const response = await fetch(SMART_LIST_URL, {
-    method: "POST",
-    headers: { "content-type": "application/json;charset=UTF-8", Accept: "application/json" },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(15000),
-  });
-  if (!response.ok) throw new Error("SMART_UPSTREAM_ERROR");
-  return response.json();
-}
-
-function normalizeSmartNotice(item) {
-  const pbancId = cleanText(item.pbancId);
-  const pbancSn = cleanText(item.pbancSn);
-  const originalUrl = safeHttpUrl(`https://www.smart-factory.kr/usr/bg/ba/ma/bsnsPbancDtl?pbancId=${encodeURIComponent(pbancId)}&pbancSn=${encodeURIComponent(pbancSn)}`);
-  const title = cleanText(item.dtlPbancNm || item.pbancNm);
-  const rawPeriod = cleanText(item.rcptYmdDa2001).includes("~")
-    ? item.rcptYmdDa2001
-    : `${item.rcptYmdDa2001 ?? ""} ~ ${item.rcptYmdDa2002 ?? ""}`;
-  return {
-    id: `smart-${pbancId}-${pbancSn}`,
-    title,
-    summary: "스마트공장 사업관리시스템 원문에서 세부 지원내용을 확인해 주세요.",
-    body: ["스마트공장 사업관리시스템이 제공한 실제 접수 진행 공고입니다."],
-    registeredAt: toIsoDate(item.pbancYmd),
-    applicationPeriod: formatPeriod(rawPeriod),
-    ministry: "중소벤처기업부",
-    category: cleanText(item.bizClsfYrNm) || "스마트공장",
-    sources: ["smart"],
-    applyName: "스마트공장 사업관리시스템",
-    applyUrl: originalUrl,
-    originalUrl,
-    attachments: [],
-    attachmentFiles: [],
-  };
-}
-
-async function fetchSmartNotices() {
-  const requestBody = { key: "list", bizYr: "", bizClsfYrNm: "", dtlPbancNm: "", rcptStts: "ING", ordrSe: "REG", currentPage: 1 };
-  const first = await postSmartFactory(requestBody);
-  const totalPages = Math.max(1, Math.min(Number(first.paginationInfo?.totalPageCount) || 1, 20));
-  const items = Array.isArray(first.pbancList) ? [...first.pbancList] : [];
-  for (let page = 2; page <= totalPages; page += 1) {
-    const payload = await postSmartFactory({ ...requestBody, currentPage: page });
-    if (Array.isArray(payload.pbancList)) items.push(...payload.pbancList);
-  }
-  return items.map(normalizeSmartNotice).filter((notice) => {
-    const endKey = getPeriodEndKey(notice.applicationPeriod);
-    return notice.title && endKey !== null && endKey >= todayInSeoul();
-  });
-}
-
-function mergeSourceNotices(sourceResults) {
-  const getDedupeKey = (notice) => `${cleanText(notice.title).toLocaleLowerCase("ko-KR")}::${cleanText(notice.applicationPeriod)}`;
-  const directByKey = new Map();
-  sourceResults.filter((result) => result.source !== "bizinfo").forEach(({ notices }) => {
-    notices.forEach((notice) => {
-      const key = getDedupeKey(notice);
-      if (!directByKey.has(key)) directByKey.set(key, []);
-      directByKey.get(key).push(notice);
-    });
-  });
-
-  const merged = [];
-  const consumedDirectIds = new Set();
-  sourceResults.forEach(({ source, notices }) => {
-    notices.forEach((notice) => {
-      if (source === "bizinfo") {
-        const matches = directByKey.get(getDedupeKey(notice)) ?? [];
-        matches.forEach((match) => {
-          notice.sources = [...new Set([...notice.sources, ...match.sources])];
-          consumedDirectIds.add(match.id);
-          if (new Date(match.registeredAt) > new Date(notice.registeredAt)) notice.registeredAt = match.registeredAt;
-        });
-      }
-      merged.push(notice);
-    });
-  });
-  return merged.filter((notice) => !consumedDirectIds.has(notice.id));
-}
-
-async function fetchBizinfoNotices(env) {
-  const apiKey = String(env.BIZINFO_API_KEY ?? "").trim();
-  if (!apiKey) throw new Error("BIZINFO_API_KEY_MISSING");
-
-  const upstreamUrl = new URL(BIZINFO_API_URL);
-  upstreamUrl.searchParams.set("crtfcKey", apiKey);
-  upstreamUrl.searchParams.set("dataType", "json");
-  upstreamUrl.searchParams.set("searchCnt", "0");
-
-  const upstream = await fetch(upstreamUrl, {
-    headers: { Accept: "application/json", "User-Agent": "DX-CORE-Notice-Service/1.0" },
+  const response = await fetch(url, {
+    headers: { Accept: "application/json" },
     signal: AbortSignal.timeout(20000),
   });
-  if (!upstream.ok) throw new Error("BIZINFO_UPSTREAM_ERROR");
-  const payload = await upstream.json();
-  if (payload?.reqErr) throw new Error("BIZINFO_AUTH_ERROR");
-
-  const todayKey = todayInSeoul();
-  const notices = getApiItems(payload)
-    .map(normalizeBizinfoNotice)
-    .filter((notice) => {
-      const endKey = getPeriodEndKey(notice.applicationPeriod);
-      return notice.title && endKey !== null && endKey >= todayKey;
-    })
-    .sort((left, right) => new Date(right.registeredAt) - new Date(left.registeredAt));
-
-  return notices;
+  const payload = await response.json().catch(() => null);
+  if (!response.ok || !payload?.response) throw new Error("DATA_GO_UPSTREAM_ERROR");
+  if (String(payload.response.header?.resultCode ?? "") !== "00") throw new Error("DATA_GO_API_ERROR");
+  return payload.response.body ?? {};
 }
 
-async function fetchNotices(env) {
-  const collectors = [
-    { source: "mss", collect: () => fetchMssNotices() },
-    { source: "semas", collect: () => fetchSemasNotices() },
-    { source: "smart", collect: () => fetchSmartNotices() },
-    { source: "bizinfo", collect: () => fetchBizinfoNotices(env) },
-  ];
-  const settled = await Promise.allSettled(collectors.map((collector) => collector.collect()));
-  const sourceResults = settled.map((result, index) => ({
-    source: collectors[index].source,
-    ok: result.status === "fulfilled",
-    notices: result.status === "fulfilled" ? result.value : [],
-    code: result.status === "rejected" ? cleanText(result.reason?.message || "UPSTREAM_ERROR") : null,
-  }));
-  const notices = mergeSourceNotices(sourceResults)
-    .sort((left, right) => new Date(right.registeredAt) - new Date(left.registeredAt));
-  const successfulSources = sourceResults.filter((source) => source.ok);
+async function fetchAllNotices(env) {
+  const apiKey = normalizeServiceKey(env.DATA_GO_KR_API_KEY);
+  const firstBody = await fetchPage(apiKey, 1);
+  const totalCount = Math.max(0, Number(firstBody.totalCount) || 0);
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+  const items = [...getItems(firstBody)];
 
-  if (!successfulSources.length) {
-    return jsonResponse({ code: "NOTICE_SOURCES_UNAVAILABLE", message: "정부기관 공식 공고 연결에 실패했습니다.", sources: sourceResults.map(({ notices: _, ...source }) => source) }, 502);
+  for (let start = 2; start <= totalPages; start += PAGE_CONCURRENCY) {
+    const pageNumbers = Array.from(
+      { length: Math.min(PAGE_CONCURRENCY, totalPages - start + 1) },
+      (_, index) => start + index,
+    );
+    const bodies = await Promise.all(pageNumbers.map((pageNo) => fetchPage(apiKey, pageNo)));
+    bodies.forEach((body) => items.push(...getItems(body)));
   }
 
-  return jsonResponse({
-    notices,
-    fetchedAt: new Date().toISOString(),
-    provider: "multi-source",
-    sources: sourceResults.map(({ notices: items, ...source }) => ({ ...source, count: items.length })),
+  const todayKey = todayInSeoul();
+  const byId = new Map();
+  items.map(normalizeNotice).forEach((notice) => {
+    const endKey = getPeriodEndKey(notice.applicationPeriod);
+    if (!notice.title || endKey === null || endKey < todayKey) return;
+    const existing = byId.get(notice.id);
+    if (!existing || new Date(notice.updatedAt) > new Date(existing.updatedAt)) byId.set(notice.id, notice);
   });
+  return [...byId.values()].sort((left, right) => new Date(right.registeredAt) - new Date(left.registeredAt));
+}
+
+async function getNoticePayload(env, force) {
+  if (!force && noticeSnapshot?.expiresAt > Date.now()) return noticeSnapshot.payload;
+
+  try {
+    const notices = await fetchAllNotices(env);
+    const payload = {
+      notices,
+      fetchedAt: new Date().toISOString(),
+      provider: "data-go-kr",
+      stale: false,
+      sources: [{ source: "dataGoKr", ok: true, count: notices.length, code: null }],
+    };
+    noticeSnapshot = { expiresAt: Date.now() + CACHE_TTL_MS, payload };
+    return payload;
+  } catch (error) {
+    if (noticeSnapshot?.payload) {
+      return {
+        ...noticeSnapshot.payload,
+        stale: true,
+        sources: [{ source: "dataGoKr", ok: false, count: noticeSnapshot.payload.notices.length, code: cleanText(error?.message) }],
+      };
+    }
+    throw error;
+  }
 }
 
 function runtimeConfig(request, env) {
@@ -400,7 +260,15 @@ export default {
     if (!["GET", "HEAD"].includes(request.method)) return new Response("Method Not Allowed", { status: 405 });
     if (url.pathname === "/api/notices") {
       if (request.method !== "GET") return new Response(null, { status: 405 });
-      return fetchNotices(env);
+      try {
+        return jsonResponse(await getNoticePayload(env, url.searchParams.get("refresh") === "1"));
+      } catch {
+        return jsonResponse({
+          code: "DATA_GO_SERVICE_UNAVAILABLE",
+          message: "공공데이터포털 공고 연결을 확인해 주세요.",
+          sources: [{ source: "dataGoKr", ok: false, count: 0, code: "DATA_GO_SERVICE_UNAVAILABLE" }],
+        }, 502);
+      }
     }
     if (url.pathname === "/assets/js/supabase-config.js") return runtimeConfig(request, env);
 
@@ -409,8 +277,6 @@ export default {
       return new Response("Not Found", { status: 404 });
     }
     if (!env.ASSETS?.fetch) return new Response("Static asset binding is unavailable", { status: 503 });
-
-    const assetUrl = new URL(pathname, request.url);
-    return withSecurityHeaders(await env.ASSETS.fetch(new Request(assetUrl, request)));
+    return withSecurityHeaders(await env.ASSETS.fetch(new Request(new URL(pathname, request.url), request)));
   },
 };

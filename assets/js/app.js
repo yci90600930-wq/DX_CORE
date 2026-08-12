@@ -1,24 +1,19 @@
 const SOURCE_CATALOG = {
-  mss: {
-    name: "중소벤처기업부",
-    shortName: "중기부",
-    url: "https://www.mss.go.kr/site/smba/ex/bbs/List.do?cbIdx=310",
+  dataGoKr: {
+    name: "공공데이터포털",
+    shortName: "공공데이터포털",
+    url: "https://www.data.go.kr/data/15157820/openapi.do",
   },
-  semas: {
-    name: "소상공인시장진흥공단",
-    shortName: "소진공",
-    url: "https://www.semas.or.kr/",
-  },
-  bizinfo: {
-    name: "기업마당",
-    shortName: "기업마당",
-    url: "https://www.bizinfo.go.kr/web/lay1/bbs/S1T122C128/AS/74/list.do",
-  },
-  smart: {
-    name: "스마트공장 사업관리시스템",
-    shortName: "스마트공장",
-    url: "https://www.smart-factory.kr/",
-  },
+};
+
+const CATEGORY_CATALOG = {
+  "smart-factory": "스마트공장",
+  "ai-ax": "AI·AX",
+  dx: "DX",
+  rnd: "R&D",
+  "policy-fund": "정책자금",
+  export: "수출",
+  other: "기타",
 };
 
 const minute = 60 * 1000;
@@ -30,7 +25,7 @@ const state = {
   savedKeywords: [],
   searchKeywords: [],
   currentUser: null,
-  selectedSource: null,
+  selectedCategory: null,
   refreshMinutes: 30,
   nextRefreshAt: null,
   refreshTimer: null,
@@ -61,7 +56,7 @@ const elements = {
   resultsEyebrow: document.querySelector("#results-eyebrow"),
   heroNewCount: document.querySelector("#hero-new-count"),
   todayLabel: document.querySelector("#today-label"),
-  sourceFilters: document.querySelector(".source-logos"),
+  categoryFilters: document.querySelector(".source-logos"),
   activeFilters: document.querySelector("#active-filters"),
   openActiveFilters: document.querySelector("#open-active-filters"),
   emptyState: document.querySelector("#empty-state"),
@@ -89,17 +84,14 @@ function deduplicateNotices(items) {
   const map = new Map();
 
   items.forEach((notice) => {
-    const key = `${normalizeText(notice.title)}::${normalizeText(notice.applicationPeriod)}`;
-    if (!map.has(key)) {
-      map.set(key, { ...notice, sources: [...notice.sources], mergedIds: [notice.id] });
-      return;
-    }
+    const existing = map.get(notice.id);
+    const noticeUpdatedAt = new Date(notice.updatedAt || notice.registeredAt).getTime();
+    const existingUpdatedAt = existing
+      ? new Date(existing.updatedAt || existing.registeredAt).getTime()
+      : Number.NEGATIVE_INFINITY;
 
-    const existing = map.get(key);
-    existing.sources = [...new Set([...existing.sources, ...notice.sources])];
-    existing.mergedIds.push(notice.id);
-    if (new Date(notice.registeredAt) > new Date(existing.registeredAt)) {
-      existing.registeredAt = notice.registeredAt;
+    if (!existing || noticeUpdatedAt > existingUpdatedAt) {
+      map.set(notice.id, { ...notice, sources: [...notice.sources], mergedIds: [notice.id] });
     }
   });
 
@@ -126,13 +118,17 @@ function matchesKeywords(notice, keywords) {
   return keywords.some((keyword) => searchable.includes(normalizeText(keyword)));
 }
 
-function matchesSelectedSource(notice) {
-  return !state.selectedSource || notice.sources.includes(state.selectedSource);
+function getCategoryKey(notice) {
+  return Object.entries(CATEGORY_CATALOG).find(([, label]) => label === notice.category)?.[0] ?? "other";
+}
+
+function matchesSelectedCategory(notice) {
+  return !state.selectedCategory || getCategoryKey(notice) === state.selectedCategory;
 }
 
 function getVisibleNotices() {
   return notices.filter(
-    (notice) => isNewNotice(notice) && matchesSelectedSource(notice) && matchesKeywords(notice, state.savedKeywords),
+    (notice) => isNewNotice(notice) && matchesSelectedCategory(notice) && matchesKeywords(notice, state.savedKeywords),
   );
 }
 
@@ -321,14 +317,14 @@ function renderResults() {
     elements.resultsTitle.textContent = "오늘의 신규 공고";
   }
 
-  const hasFilters = state.savedKeywords.length > 0 || state.selectedSource;
+  const hasFilters = state.savedKeywords.length > 0 || state.selectedCategory;
   elements.activeFilters.hidden = !hasFilters;
   if (hasFilters) {
-    const sourceFilter = state.selectedSource
-      ? `<span>기관: ${escapeHtml(SOURCE_CATALOG[state.selectedSource].shortName)}</span>`
+    const categoryFilter = state.selectedCategory
+      ? `<span>분류: ${escapeHtml(CATEGORY_CATALOG[state.selectedCategory])}</span>`
       : "";
-    const filterNote = state.savedKeywords.length ? "제목·본문 중 하나 이상 포함" : "선택 기관 공고만 표시";
-    elements.activeFilters.innerHTML = `<strong>적용 조건</strong>${sourceFilter}${state.savedKeywords
+    const filterNote = state.savedKeywords.length ? "제목·본문 중 하나 이상 포함" : "선택 분류 공고만 표시";
+    elements.activeFilters.innerHTML = `<strong>적용 조건</strong>${categoryFilter}${state.savedKeywords
       .map((keyword) => `<span># ${escapeHtml(keyword)}</span>`)
       .join("")}<small>${filterNote}</small>`;
   } else {
@@ -343,7 +339,6 @@ function renderResults() {
     button.setAttribute("aria-label", `${notice.title} 상세 보기`);
     badges.append(createBadge(notice.category));
     if (isNewNotice(notice)) badges.append(createBadge("신규", "new"));
-    if (notice.sources.length > 1) badges.append(createBadge(`${notice.sources.length}개 공고 통합`, "merged"));
     card.querySelector(".registered-date").textContent = `등록 ${formatRegisteredDate(notice.registeredAt)}`;
     card.querySelector(".notice-title").textContent = notice.title;
     card.querySelector(".notice-summary").textContent = notice.summary;
@@ -357,7 +352,7 @@ function renderResults() {
 function renderOpenNotices() {
   const combinedKeywords = [...new Set([...state.savedKeywords, ...state.searchKeywords])];
   const availableNotices = getOpenNotices().filter(
-    ({ notice }) => matchesSelectedSource(notice) && matchesKeywords(notice, combinedKeywords),
+    ({ notice }) => matchesSelectedCategory(notice) && matchesKeywords(notice, combinedKeywords),
   );
   elements.openNoticeList.replaceChildren();
   elements.openNoticeCount.textContent = availableNotices.length;
@@ -365,14 +360,14 @@ function renderOpenNotices() {
   elements.openNoticeList.hidden = availableNotices.length === 0;
   elements.clearSearch.hidden = state.searchKeywords.length === 0;
 
-  const hasFilters = combinedKeywords.length > 0 || state.selectedSource;
+  const hasFilters = combinedKeywords.length > 0 || state.selectedCategory;
   elements.openActiveFilters.hidden = !hasFilters;
   if (hasFilters) {
-    const sourceFilter = state.selectedSource
-      ? `<span>기관: ${escapeHtml(SOURCE_CATALOG[state.selectedSource].shortName)}</span>`
+    const categoryFilter = state.selectedCategory
+      ? `<span>분류: ${escapeHtml(CATEGORY_CATALOG[state.selectedCategory])}</span>`
       : "";
-    const filterNote = combinedKeywords.length ? "제목·본문 중 하나 이상 포함" : "선택 기관 공고만 표시";
-    elements.openActiveFilters.innerHTML = `<strong>적용 조건</strong>${sourceFilter}${combinedKeywords
+    const filterNote = combinedKeywords.length ? "제목·본문 중 하나 이상 포함" : "선택 분류 공고만 표시";
+    elements.openActiveFilters.innerHTML = `<strong>적용 조건</strong>${categoryFilter}${combinedKeywords
       .map((keyword) => `<span># ${escapeHtml(keyword)}</span>`)
       .join("")}<small>${filterNote}</small>`;
   } else {
@@ -387,7 +382,6 @@ function renderOpenNotices() {
     button.setAttribute("aria-label", `${notice.title} 상세 보기`);
     badges.append(createBadge(status.label, status.className));
     badges.append(createBadge(notice.category));
-    if (notice.sources.length > 1) badges.append(createBadge(`${notice.sources.length}개 공고 통합`, "merged"));
     card.querySelector(".registered-date").textContent = `등록 ${formatRegisteredDate(notice.registeredAt)}`;
     card.querySelector(".notice-title").textContent = notice.title;
     card.querySelector(".notice-summary").textContent = notice.summary;
@@ -407,9 +401,9 @@ function renderPeriod() {
     weekday: "short",
   }).format(end);
   elements.heroNewCount.textContent = notices.filter(
-    (notice) => isNewNotice(notice) && matchesSelectedSource(notice),
+    (notice) => isNewNotice(notice) && matchesSelectedCategory(notice),
   ).length;
-  renderSourceCounts();
+  renderCategoryCounts();
 }
 
 function setDataStatus(status, message) {
@@ -430,7 +424,7 @@ function isNoticePayload(value) {
     && typeof value.applyUrl === "string"
     && typeof value.originalUrl === "string"
     && Array.isArray(value.body) && value.body.every((item) => typeof item === "string")
-    && Array.isArray(value.sources) && value.sources.every((item) => item in SOURCE_CATALOG)
+    && Array.isArray(value.sources) && value.sources.length === 1 && value.sources[0] === "dataGoKr"
     && Array.isArray(value.attachments) && value.attachments.every((item) => typeof item === "string")
     && Array.isArray(value.attachmentFiles)
     && value.attachmentFiles.every((file) => typeof file?.name === "string" && typeof file?.url === "string");
@@ -450,8 +444,7 @@ async function collectNotices({ announce = false, force = false } = {}) {
     const nextNotices = Array.isArray(payload.notices) ? payload.notices.filter(isNoticePayload) : [];
     notices = deduplicateNotices(nextNotices);
     state.fetchedAt = payload.fetchedAt || new Date().toISOString();
-    const connectedSources = Array.isArray(payload.sources) ? payload.sources.filter((source) => source.ok).length : 0;
-    setDataStatus("ready", `공식 공고 ${connectedSources}/4개 기관 · ${notices.length}건 확인`);
+    setDataStatus("ready", `공공데이터포털 공식 공고 ${notices.length}건 확인`);
     renderResults();
     renderOpenNotices();
     renderPeriod();
@@ -473,34 +466,33 @@ async function collectNotices({ announce = false, force = false } = {}) {
   }
 }
 
-function renderSourceFilters() {
-  elements.sourceFilters.querySelectorAll("[data-source]").forEach((button) => {
-    button.setAttribute("aria-pressed", String(button.dataset.source === state.selectedSource));
+function renderCategoryFilters() {
+  elements.categoryFilters.querySelectorAll("[data-category]").forEach((button) => {
+    const category = button.dataset.category;
+    const isAll = category === "all" || category === "";
+    button.setAttribute("aria-pressed", String(isAll ? !state.selectedCategory : category === state.selectedCategory));
   });
 }
 
-function renderSourceCounts() {
-  const counts = Object.fromEntries(Object.keys(SOURCE_CATALOG).map((sourceKey) => [sourceKey, 0]));
+function renderCategoryCounts() {
+  const counts = Object.fromEntries(Object.keys(CATEGORY_CATALOG).map((categoryKey) => [categoryKey, 0]));
+  counts.all = 0;
 
   getOpenNotices().forEach(({ notice, status }) => {
     if (status.className === "upcoming") return;
-    notice.sources.forEach((sourceKey) => {
-      if (sourceKey in counts) counts[sourceKey] += 1;
-    });
+    counts.all += 1;
+    counts[getCategoryKey(notice)] += 1;
   });
 
-  elements.sourceFilters.querySelectorAll("[data-source-count]").forEach((countElement) => {
-    countElement.textContent = counts[countElement.dataset.sourceCount] ?? 0;
+  elements.categoryFilters.querySelectorAll("[data-category-count]").forEach((countElement) => {
+    const category = countElement.dataset.categoryCount || "all";
+    countElement.textContent = counts[category] ?? 0;
   });
 }
 
 function renderDetail(notice) {
-  const primarySource = SOURCE_CATALOG[notice.sources[0]];
-  const originalLabel = `${primarySource?.name ?? "정부기관"} 개별 원문 공고`;
+  const originalLabel = "공공데이터포털 제공 원문 공고";
   const sourceLinks = `<li><a href="${escapeHtml(notice.originalUrl)}" target="_blank" rel="noopener noreferrer"><span>${escapeHtml(originalLabel)}</span><span aria-hidden="true">↗</span></a></li>`;
-  const mergedBadge = notice.sources.length > 1
-    ? `<span class="notice-badge merged">${notice.sources.length}개 출처 통합</span>`
-    : "";
   const attachmentContent = notice.attachmentFiles?.length
     ? `<ul class="source-link-list">${notice.attachmentFiles.map((file) => `<li><a href="${escapeHtml(file.url)}" target="_blank" rel="noopener noreferrer"><span>${escapeHtml(file.name)}</span><span aria-hidden="true">↗</span></a></li>`).join("")}</ul>`
     : `<div class="attachment-note"><span aria-hidden="true">i</span><span><strong>${notice.attachments.map(escapeHtml).join(", ") || "첨부파일은 원문 공고에서 확인"}</strong><br />첨부파일의 내용은 키워드 검색 대상에 포함하지 않습니다.</span></div>`;
@@ -510,7 +502,6 @@ function renderDetail(notice) {
       <div class="detail-badges">
         <span class="notice-badge">${escapeHtml(notice.category)}</span>
         ${isNewNotice(notice) ? '<span class="notice-badge new">신규 공고</span>' : ""}
-        ${mergedBadge}
       </div>
       <div class="detail-heading-row">
         <h1 id="detail-title">${escapeHtml(notice.title)}</h1>
@@ -669,22 +660,24 @@ document.querySelector(".suggested-keywords").addEventListener("click", (event) 
   if (button) addKeywords([button.dataset.keyword]);
 });
 
-elements.sourceFilters.addEventListener("click", (event) => {
-  const button = event.target.closest("[data-source]");
+elements.categoryFilters.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-category]");
   if (!button) return;
-  state.selectedSource = state.selectedSource === button.dataset.source ? null : button.dataset.source;
-  renderSourceFilters();
+  const category = button.dataset.category;
+  const nextCategory = category === "all" || category === "" ? null : category;
+  state.selectedCategory = state.selectedCategory === nextCategory ? null : nextCategory;
+  renderCategoryFilters();
   renderResults();
   renderOpenNotices();
   renderPeriod();
-  const label = state.selectedSource ? `${SOURCE_CATALOG[state.selectedSource].shortName} 공고만 표시합니다.` : "전체 기관 공고를 표시합니다.";
+  const label = state.selectedCategory ? `${CATEGORY_CATALOG[state.selectedCategory]} 분류 공고만 표시합니다.` : "전체 분류 공고를 표시합니다.";
   showToast(label);
   document.querySelector(".results-section").scrollIntoView({ behavior: "smooth", block: "start" });
 });
 
-elements.sourceFilters.addEventListener("keydown", (event) => {
-  const buttons = [...elements.sourceFilters.querySelectorAll("[data-source]")];
-  const currentIndex = buttons.indexOf(event.target.closest("[data-source]"));
+elements.categoryFilters.addEventListener("keydown", (event) => {
+  const buttons = [...elements.categoryFilters.querySelectorAll("[data-category]")];
+  const currentIndex = buttons.indexOf(event.target.closest("[data-category]"));
   if (currentIndex < 0) return;
 
   let nextIndex = null;
@@ -735,13 +728,13 @@ elements.openNoticeList.addEventListener("click", (event) => {
 
 elements.clearSearch.addEventListener("click", clearSearch);
 elements.emptyReset.addEventListener("click", () => {
-  if (state.selectedSource) {
-    state.selectedSource = null;
-    renderSourceFilters();
+  if (state.selectedCategory) {
+    state.selectedCategory = null;
+    renderCategoryFilters();
     renderResults();
     renderOpenNotices();
     renderPeriod();
-    showToast("전체 기관 공고를 표시합니다.");
+    showToast("전체 분류 공고를 표시합니다.");
     return;
   }
   if (state.currentUser) {
@@ -778,7 +771,7 @@ elements.signoutButton.addEventListener("click", async () => {
 window.addEventListener("hashchange", showDetailFromHash);
 
 renderPeriod();
-renderSourceFilters();
+renderCategoryFilters();
 renderSavedKeywords();
 renderResults();
 renderOpenNotices();
