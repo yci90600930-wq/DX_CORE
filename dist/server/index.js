@@ -178,14 +178,23 @@ async function fetchPage(apiKey, pageNo) {
   url.searchParams.set("pageNo", String(pageNo));
   url.searchParams.set("numOfRows", String(PAGE_SIZE));
 
-  const response = await fetch(url, {
-    headers: { Accept: "application/json" },
-    signal: AbortSignal.timeout(20000),
-  });
-  const payload = await response.json().catch(() => null);
-  if (!response.ok || !payload?.response) throw new Error("DATA_GO_UPSTREAM_ERROR");
-  if (String(payload.response.header?.resultCode ?? "") !== "00") throw new Error("DATA_GO_API_ERROR");
-  return payload.response.body ?? {};
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const response = await fetch(url, {
+        headers: { Accept: "application/json" },
+        signal: AbortSignal.timeout(20000),
+      });
+      const payload = await response.json().catch(() => null);
+      const isValid = response.ok
+        && payload?.response
+        && String(payload.response.header?.resultCode ?? "") === "00";
+      if (isValid) return payload.response.body ?? {};
+    } catch {
+      // Network and timeout failures are retried once without exposing request details.
+    }
+  }
+
+  throw new Error("DATA_GO_UPSTREAM_ERROR");
 }
 
 async function fetchAllNotices(env) {
