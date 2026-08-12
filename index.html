@@ -233,7 +233,24 @@
               <button id="today-next" type="button" aria-controls="result-list">다음</button>
             </div>
           </div>
-          <div id="result-list" class="result-list" aria-live="polite"></div>
+          <div class="table-scroll-wrapper">
+            <table class="notice-table">
+              <caption class="sr-only">오늘 신규 정부지원사업 공고 목록</caption>
+              <thead>
+                <tr>
+                  <th scope="col">번호</th>
+                  <th scope="col">지원분야</th>
+                  <th scope="col">지원사업명</th>
+                  <th scope="col">신청기간</th>
+                  <th scope="col">소관부처·지역</th>
+                  <th scope="col">사업수행기관</th>
+                  <th scope="col">등록일</th>
+                  <th scope="col">조회수</th>
+                </tr>
+              </thead>
+              <tbody id="result-list" aria-live="polite"></tbody>
+            </table>
+          </div>
 
           <div id="empty-state" class="empty-state" hidden>
             <span class="empty-icon" aria-hidden="true"></span>
@@ -281,7 +298,24 @@
               <button id="open-next" type="button" aria-controls="open-notice-list">다음</button>
             </div>
           </div>
-          <div id="open-notice-list" class="result-list open-notice-list" aria-live="polite"></div>
+          <div class="table-scroll-wrapper">
+            <table class="notice-table">
+              <caption class="sr-only">마감되지 않은 정부지원사업 공고 목록</caption>
+              <thead>
+                <tr>
+                  <th scope="col">번호</th>
+                  <th scope="col">지원분야</th>
+                  <th scope="col">지원사업명</th>
+                  <th scope="col">신청기간</th>
+                  <th scope="col">소관부처·지역</th>
+                  <th scope="col">사업수행기관</th>
+                  <th scope="col">등록일</th>
+                  <th scope="col">조회수</th>
+                </tr>
+              </thead>
+              <tbody id="open-notice-list" aria-live="polite"></tbody>
+            </table>
+          </div>
           <div id="open-notice-empty" class="empty-state" hidden>
             <span class="empty-icon" aria-hidden="true"></span>
             <h3>현재 접수 가능한 공고가 없어요</h3>

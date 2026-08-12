@@ -254,6 +254,16 @@ function formatRegisteredDate(value) {
   }).format(date);
 }
 
+function formatTableDate(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime()) || date.getUTCFullYear() <= 1970) return "확인 필요";
+  return new Intl.DateTimeFormat("en-CA", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
+
 function escapeHtml(value) {
   return String(value)
     .replaceAll("&", "&amp;")
@@ -363,6 +373,7 @@ function getPage(items, pagination) {
   const startIndex = (pagination.currentPage - 1) * pagination.pageSize;
   return {
     items: items.slice(startIndex, startIndex + pagination.pageSize),
+    startIndex,
     totalPages,
   };
 }
@@ -379,42 +390,54 @@ function renderPagination(pagination, totalItems, controls) {
   if (controls.next) controls.next.disabled = totalPages === 0 || pagination.currentPage >= totalPages;
 }
 
-function createCompactNoticeItem(notice) {
-  const item = document.createElement("div");
-  item.className = "compact-notice-item";
-  item.setAttribute("role", "listitem");
+function createTableRow(notice, rowNumber) {
+  const row = document.createElement("tr");
+  const appendCell = (label, content, className = "") => {
+    const cell = document.createElement("td");
+    cell.dataset.label = label;
+    if (className) cell.className = className;
+    if (content instanceof Node) cell.append(content);
+    else cell.textContent = content;
+    row.append(cell);
+  };
 
+  appendCell("번호", String(rowNumber), "notice-number-cell");
+  appendCell("지원분야", notice.category, "notice-category-cell");
   const button = document.createElement("button");
   button.type = "button";
-  button.className = "compact-notice-button";
+  button.className = "notice-title-button";
   button.dataset.noticeId = notice.id;
   button.setAttribute("aria-label", `${notice.title} 상세 보기`);
-  const regionBadges = document.createElement("span");
-  regionBadges.className = "notice-region-list";
-  notice.regions.forEach((region) => {
-    const badge = document.createElement("span");
-    badge.className = "notice-region-badge";
-    badge.textContent = region;
-    regionBadges.append(badge);
-  });
-  const title = document.createElement("span");
-  title.className = "compact-notice-title";
-  title.textContent = notice.title;
-  button.append(regionBadges, title);
-  item.append(button);
+  button.textContent = notice.title;
+  appendCell("지원사업명", button, "notice-title-cell");
+  appendCell("신청기간", notice.applicationPeriod, "notice-period-cell");
 
-  return item;
+  const ministry = document.createElement("span");
+  ministry.className = "notice-ministry-name";
+  ministry.textContent = notice.ministry;
+  const regions = document.createElement("span");
+  regions.className = "notice-table-regions";
+  regions.textContent = notice.regions.join(", ");
+  const ministryRegion = document.createElement("span");
+  ministryRegion.className = "notice-ministry-region";
+  ministryRegion.append(ministry, document.createElement("br"), regions);
+  appendCell("소관부처·지역", ministryRegion, "notice-ministry-cell");
+  appendCell("사업수행기관", notice.agency || notice.applyName, "notice-agency-cell");
+  appendCell("등록일", formatTableDate(notice.registeredAt), "notice-date-cell");
+  appendCell("조회수", notice.viewCount.toLocaleString("ko-KR"), "notice-views-cell");
+
+  return row;
 }
 
 function renderResults() {
   const visible = getVisibleNotices();
   const page = getPage(visible, state.todayPagination);
-  elements.resultList.classList.add("compact-notice-list");
-  elements.resultList.setAttribute("role", "list");
   elements.resultList.replaceChildren();
   elements.resultCount.textContent = visible.length;
   elements.emptyState.hidden = visible.length > 0;
   elements.resultList.hidden = visible.length === 0;
+  const resultTable = elements.resultList.closest(".table-scroll-wrapper");
+  if (resultTable) resultTable.hidden = visible.length === 0;
 
   if (state.savedKeywords.length) {
     elements.resultsEyebrow.textContent = "관심 키워드 신규 공고";
@@ -441,7 +464,9 @@ function renderResults() {
     elements.activeFilters.replaceChildren();
   }
 
-  page.items.forEach((notice) => elements.resultList.append(createCompactNoticeItem(notice)));
+  page.items.forEach((notice, index) => {
+    elements.resultList.append(createTableRow(notice, visible.length - page.startIndex - index));
+  });
   renderPagination(state.todayPagination, visible.length, {
     pageSize: elements.todayPageSize,
     prev: elements.todayPrev,
@@ -458,12 +483,12 @@ function renderOpenNotices() {
       && matchesKeywords(notice, combinedKeywords),
   );
   const page = getPage(availableNotices, state.openPagination);
-  elements.openNoticeList.classList.add("compact-notice-list");
-  elements.openNoticeList.setAttribute("role", "list");
   elements.openNoticeList.replaceChildren();
   elements.openNoticeCount.textContent = availableNotices.length;
   elements.openNoticeEmpty.hidden = availableNotices.length > 0;
   elements.openNoticeList.hidden = availableNotices.length === 0;
+  const openNoticeTable = elements.openNoticeList.closest(".table-scroll-wrapper");
+  if (openNoticeTable) openNoticeTable.hidden = availableNotices.length === 0;
   elements.clearSearch.hidden = state.searchKeywords.length === 0;
 
   const hasFilters = combinedKeywords.length > 0 || state.selectedCategory || state.selectedRegion;
@@ -483,7 +508,9 @@ function renderOpenNotices() {
     elements.openActiveFilters.replaceChildren();
   }
 
-  page.items.forEach(({ notice }) => elements.openNoticeList.append(createCompactNoticeItem(notice)));
+  page.items.forEach(({ notice }, index) => {
+    elements.openNoticeList.append(createTableRow(notice, availableNotices.length - page.startIndex - index));
+  });
   renderPagination(state.openPagination, availableNotices.length, {
     pageSize: elements.openPageSize,
     prev: elements.openPrev,
@@ -521,6 +548,7 @@ function isNoticePayload(value) {
     && typeof value.applicationPeriod === "string"
     && typeof value.ministry === "string"
     && typeof value.category === "string"
+    && Number.isInteger(value.viewCount) && value.viewCount >= 0
     && Array.isArray(value.regions) && value.regions.length > 0
     && value.regions.every((region) => typeof region === "string" && REGION_CATALOG.has(region))
     && new Set(value.regions).size === value.regions.length

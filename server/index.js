@@ -199,6 +199,7 @@ function normalizeNotice(item) {
   const method = cleanText(item.reqstMthPapersCn);
   const contact = cleanText(item.refrncNm);
   const hashtags = cleanText(item.hashtags).split(",").map((tag) => tag.trim()).filter(Boolean);
+  const rawViewCount = Number(item.inqireCo);
   const originalUrl = safeHttpUrl(item.pblancUrl);
   const applyUrl = safeHttpUrl(item.rceptEngnHmpgUrl, originalUrl);
   const attachmentFiles = [
@@ -221,6 +222,7 @@ function normalizeNotice(item) {
     applicationPeriod: formatPeriod(item.reqstBeginEndDe),
     ministry: cleanText(item.jrsdInsttNm) || "소관기관 확인 필요",
     agency: cleanText(item.excInsttNm),
+    viewCount: Number.isInteger(rawViewCount) && rawViewCount >= 0 ? rawViewCount : 0,
     category: classifyCategory(item),
     regions: detectRegions(item),
     sources: ["dataGoKr"],
