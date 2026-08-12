@@ -18,6 +18,9 @@ const CATEGORY_CATALOG = {
 
 const minute = 60 * 1000;
 const hour = 60 * minute;
+const NOTICE_API_URL = window.location.protocol === "file:"
+  ? "https://dx-core-support-notices.yci90600930.chatgpt.site/api/notices"
+  : "/api/notices";
 
 let notices = [];
 
@@ -434,7 +437,7 @@ async function collectNotices({ announce = false, force = false } = {}) {
   setDataStatus("loading", "공식 공고를 확인하고 있습니다");
 
   try {
-    const response = await fetch(force ? "/api/notices?refresh=1" : "/api/notices", {
+    const response = await fetch(force ? `${NOTICE_API_URL}?refresh=1` : NOTICE_API_URL, {
       headers: { Accept: "application/json" },
       cache: force ? "no-store" : "default",
     });
