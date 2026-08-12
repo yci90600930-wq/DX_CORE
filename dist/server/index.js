@@ -139,23 +139,46 @@ function detectRegions(item) {
     item.jrsdInsttNm,
     item.excInsttNm,
   ].join(" "));
-  const fullText = cleanText(`${hashtagValues.join(" ")} ${descriptiveText}`);
   const regions = new Set();
 
   REGION_PATTERNS.forEach(([region, pattern]) => {
-    if (pattern.test(fullText) || hashtagValues.some((tag) => pattern.test(tag))) regions.add(region);
+    if (pattern.test(descriptiveText)) regions.add(region);
   });
 
-  const hasGyeonggiGwangju = /경기(?:도)?\s*광주(?:시)?|경기광주/.test(fullText);
+  const hasGyeonggiGwangju = /경기(?:도)?\s*광주(?:시)?|경기광주/.test(descriptiveText);
   const hasGyeonggi = hasGyeonggiGwangju
-    || /경기도|경기\s*(?:지역|소재|도내|권)/.test(fullText)
-    || hashtagValues.some((tag) => /^(?:경기|경기도|경기광주)$/.test(tag));
+    || /경기도|경기\s*(?:지역|소재|도내|권)/.test(descriptiveText);
   if (hasGyeonggi) regions.add("경기");
 
-  const textWithoutGyeonggiGwangju = fullText.replace(/경기(?:도)?\s*광주(?:시)?|경기광주/g, " ");
-  const hasGwangju = /광주(?:광역시|시)?/.test(textWithoutGyeonggiGwangju)
-    || hashtagValues.some((tag) => /^(?:광주|광주광역시)$/.test(tag));
-  if (hasGwangju) regions.add("광주");
+  const textWithoutGyeonggiGwangju = descriptiveText.replace(/경기(?:도)?\s*광주(?:시)?|경기광주/g, " ");
+  if (/광주(?:광역시|시)?/.test(textWithoutGyeonggiGwangju)) regions.add("광주");
+
+  const exactRegionTags = new Set();
+  hashtagValues.forEach((tag) => {
+    const compactTag = tag.replace(/\s+/g, "");
+    const matchedRegion = [
+      ["서울", /^(?:서울|서울시|서울특별시)$/],
+      ["부산", /^(?:부산|부산시|부산광역시)$/],
+      ["대구", /^(?:대구|대구시|대구광역시)$/],
+      ["인천", /^(?:인천|인천시|인천광역시)$/],
+      ["광주", /^(?:광주|광주시|광주광역시)$/],
+      ["대전", /^(?:대전|대전시|대전광역시)$/],
+      ["울산", /^(?:울산|울산시|울산광역시)$/],
+      ["세종", /^(?:세종|세종시|세종특별자치시)$/],
+      ["경기", /^(?:경기|경기도|경기광주|경기도광주시)$/],
+      ["강원", /^(?:강원|강원도|강원특별자치도)$/],
+      ["충북", /^(?:충북|충청북도)$/],
+      ["충남", /^(?:충남|충청남도)$/],
+      ["전북", /^(?:전북|전라북도|전북특별자치도)$/],
+      ["전남", /^(?:전남|전라남도)$/],
+      ["경북", /^(?:경북|경상북도)$/],
+      ["경남", /^(?:경남|경상남도)$/],
+      ["제주", /^(?:제주|제주도|제주특별자치도)$/],
+    ].find(([, pattern]) => pattern.test(compactTag))?.[0];
+    if (matchedRegion) exactRegionTags.add(matchedRegion);
+  });
+
+  if (exactRegionTags.size <= 3) exactRegionTags.forEach((region) => regions.add(region));
 
   return regions.size ? REGION_ORDER.filter((region) => regions.has(region)) : ["전국"];
 }
