@@ -35,6 +35,8 @@ const state = {
   toastTimer: null,
   fetchedAt: null,
   dataStatus: "loading",
+  todayPagination: { pageSize: 10, currentPage: 1 },
+  openPagination: { pageSize: 10, currentPage: 1 },
 };
 
 const elements = {
@@ -65,7 +67,14 @@ const elements = {
   emptyState: document.querySelector("#empty-state"),
   emptyReset: document.querySelector("#empty-reset"),
   clearSearch: document.querySelector("#clear-search"),
-  template: document.querySelector("#result-card-template"),
+  todayPageSize: document.querySelector("#today-page-size"),
+  todayPrev: document.querySelector("#today-prev"),
+  todayPageStatus: document.querySelector("#today-page-status"),
+  todayNext: document.querySelector("#today-next"),
+  openPageSize: document.querySelector("#open-page-size"),
+  openPrev: document.querySelector("#open-prev"),
+  openPageStatus: document.querySelector("#open-page-status"),
+  openNext: document.querySelector("#open-next"),
   toast: document.querySelector("#toast"),
   authOpenButton: document.querySelector("#auth-open-button"),
   accountStatus: document.querySelector("#account-status"),
@@ -238,6 +247,7 @@ async function loadAccountKeywords() {
   try {
     const keywords = await window.DXAuth.loadKeywords();
     state.savedKeywords = [...new Set(keywords)];
+    resetPagination();
     renderSavedKeywords();
     renderResults();
     renderOpenNotices();
@@ -266,6 +276,7 @@ async function handleAuthChange({ event, user }) {
 
   if (nextUserId && previousUserId !== nextUserId) {
     state.savedKeywords = [];
+    resetPagination();
     renderSavedKeywords();
     renderResults();
     renderOpenNotices();
@@ -273,6 +284,7 @@ async function handleAuthChange({ event, user }) {
     if (event !== "INITIAL_SESSION") showToast("로그인했습니다. 계정의 관심 키워드를 불러왔어요.");
   } else if (!nextUserId && previousUserId) {
     state.savedKeywords = [];
+    resetPagination();
     renderSavedKeywords();
     renderResults();
     renderOpenNotices();
@@ -298,15 +310,56 @@ function renderSavedKeywords() {
   });
 }
 
-function createBadge(text, className = "") {
-  const badge = document.createElement("span");
-  badge.className = `notice-badge ${className}`.trim();
-  badge.textContent = text;
-  return badge;
+function resetPagination(target = "both") {
+  if (target === "both" || target === "today") state.todayPagination.currentPage = 1;
+  if (target === "both" || target === "open") state.openPagination.currentPage = 1;
+}
+
+function getPage(items, pagination) {
+  const totalPages = items.length ? Math.ceil(items.length / pagination.pageSize) : 0;
+  pagination.currentPage = totalPages
+    ? Math.min(Math.max(pagination.currentPage, 1), totalPages)
+    : 1;
+  const startIndex = (pagination.currentPage - 1) * pagination.pageSize;
+  return {
+    items: items.slice(startIndex, startIndex + pagination.pageSize),
+    totalPages,
+  };
+}
+
+function renderPagination(pagination, totalItems, controls) {
+  const totalPages = totalItems ? Math.ceil(totalItems / pagination.pageSize) : 0;
+  if (controls.pageSize) controls.pageSize.value = String(pagination.pageSize);
+  if (controls.status) {
+    controls.status.textContent = totalPages
+      ? `${pagination.currentPage} / ${totalPages} 페이지`
+      : "0 / 0 페이지";
+  }
+  if (controls.prev) controls.prev.disabled = totalPages === 0 || pagination.currentPage <= 1;
+  if (controls.next) controls.next.disabled = totalPages === 0 || pagination.currentPage >= totalPages;
+}
+
+function createCompactNoticeItem(notice) {
+  const item = document.createElement("div");
+  item.className = "compact-notice-item";
+  item.setAttribute("role", "listitem");
+
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "compact-notice-button";
+  button.dataset.noticeId = notice.id;
+  button.setAttribute("aria-label", `${notice.title} 상세 보기`);
+  button.textContent = notice.title;
+  item.append(button);
+
+  return item;
 }
 
 function renderResults() {
   const visible = getVisibleNotices();
+  const page = getPage(visible, state.todayPagination);
+  elements.resultList.classList.add("compact-notice-list");
+  elements.resultList.setAttribute("role", "list");
   elements.resultList.replaceChildren();
   elements.resultCount.textContent = visible.length;
   elements.emptyState.hidden = visible.length > 0;
@@ -334,21 +387,12 @@ function renderResults() {
     elements.activeFilters.replaceChildren();
   }
 
-  visible.forEach((notice) => {
-    const card = elements.template.content.cloneNode(true);
-    const button = card.querySelector(".notice-card-button");
-    const badges = card.querySelector(".notice-badges");
-    button.dataset.noticeId = notice.id;
-    button.setAttribute("aria-label", `${notice.title} 상세 보기`);
-    badges.append(createBadge(notice.category));
-    if (isNewNotice(notice)) badges.append(createBadge("신규", "new"));
-    card.querySelector(".registered-date").textContent = `등록 ${formatRegisteredDate(notice.registeredAt)}`;
-    card.querySelector(".notice-title").textContent = notice.title;
-    card.querySelector(".notice-summary").textContent = notice.summary;
-    card.querySelector(".notice-ministry").textContent = notice.ministry;
-    card.querySelector(".notice-period").textContent = notice.applicationPeriod;
-    card.querySelector(".notice-apply").textContent = notice.applyName;
-    elements.resultList.append(card);
+  page.items.forEach((notice) => elements.resultList.append(createCompactNoticeItem(notice)));
+  renderPagination(state.todayPagination, visible.length, {
+    pageSize: elements.todayPageSize,
+    prev: elements.todayPrev,
+    status: elements.todayPageStatus,
+    next: elements.todayNext,
   });
 }
 
@@ -357,6 +401,9 @@ function renderOpenNotices() {
   const availableNotices = getOpenNotices().filter(
     ({ notice }) => matchesSelectedCategory(notice) && matchesKeywords(notice, combinedKeywords),
   );
+  const page = getPage(availableNotices, state.openPagination);
+  elements.openNoticeList.classList.add("compact-notice-list");
+  elements.openNoticeList.setAttribute("role", "list");
   elements.openNoticeList.replaceChildren();
   elements.openNoticeCount.textContent = availableNotices.length;
   elements.openNoticeEmpty.hidden = availableNotices.length > 0;
@@ -377,21 +424,12 @@ function renderOpenNotices() {
     elements.openActiveFilters.replaceChildren();
   }
 
-  availableNotices.forEach(({ notice, status }) => {
-    const card = elements.template.content.cloneNode(true);
-    const button = card.querySelector(".notice-card-button");
-    const badges = card.querySelector(".notice-badges");
-    button.dataset.noticeId = notice.id;
-    button.setAttribute("aria-label", `${notice.title} 상세 보기`);
-    badges.append(createBadge(status.label, status.className));
-    badges.append(createBadge(notice.category));
-    card.querySelector(".registered-date").textContent = `등록 ${formatRegisteredDate(notice.registeredAt)}`;
-    card.querySelector(".notice-title").textContent = notice.title;
-    card.querySelector(".notice-summary").textContent = notice.summary;
-    card.querySelector(".notice-ministry").textContent = notice.ministry;
-    card.querySelector(".notice-period").textContent = notice.applicationPeriod;
-    card.querySelector(".notice-apply").textContent = notice.applyName;
-    elements.openNoticeList.append(card);
+  page.items.forEach(({ notice }) => elements.openNoticeList.append(createCompactNoticeItem(notice)));
+  renderPagination(state.openPagination, availableNotices.length, {
+    pageSize: elements.openPageSize,
+    prev: elements.openPrev,
+    status: elements.openPageStatus,
+    next: elements.openNext,
   });
 }
 
@@ -447,6 +485,7 @@ async function collectNotices({ announce = false, force = false } = {}) {
     const nextNotices = Array.isArray(payload.notices) ? payload.notices.filter(isNoticePayload) : [];
     notices = deduplicateNotices(nextNotices);
     state.fetchedAt = payload.fetchedAt || new Date().toISOString();
+    resetPagination();
     setDataStatus("ready", `공공데이터포털 공식 공고 ${notices.length}건 확인`);
     renderResults();
     renderOpenNotices();
@@ -592,6 +631,7 @@ async function addKeywords(keywords) {
 
   if (!storedKeywords.length) return;
   state.savedKeywords.push(...storedKeywords);
+  resetPagination();
   renderSavedKeywords();
   renderResults();
   renderOpenNotices();
@@ -601,6 +641,7 @@ async function addKeywords(keywords) {
 
 function clearSearch() {
   state.searchKeywords = [];
+  resetPagination("open");
   elements.searchInput.value = "";
   renderOpenNotices();
 }
@@ -642,6 +683,7 @@ elements.searchForm.addEventListener("submit", (event) => {
     return;
   }
   state.searchKeywords = keywords;
+  resetPagination("open");
   renderOpenNotices();
   document.querySelector(".open-notices-section").scrollIntoView({ behavior: "smooth", block: "start" });
 });
@@ -669,6 +711,7 @@ elements.categoryFilters.addEventListener("click", (event) => {
   const category = button.dataset.category;
   const nextCategory = category === "all" || category === "" ? null : category;
   state.selectedCategory = state.selectedCategory === nextCategory ? null : nextCategory;
+  resetPagination();
   renderCategoryFilters();
   renderResults();
   renderOpenNotices();
@@ -708,6 +751,7 @@ elements.savedKeywords.addEventListener("click", async (event) => {
     }
   }
   state.savedKeywords = state.savedKeywords.filter((keyword) => keyword !== button.dataset.removeKeyword);
+  resetPagination();
   renderSavedKeywords();
   renderResults();
   renderOpenNotices();
@@ -729,10 +773,47 @@ elements.openNoticeList.addEventListener("click", (event) => {
   if (button) window.location.hash = `notice=${encodeURIComponent(button.dataset.noticeId)}`;
 });
 
+elements.todayPageSize?.addEventListener("change", () => {
+  const pageSize = Number(elements.todayPageSize.value);
+  if (![10, 20, 50, 100].includes(pageSize)) return;
+  state.todayPagination.pageSize = pageSize;
+  resetPagination("today");
+  renderResults();
+});
+
+elements.todayPrev?.addEventListener("click", () => {
+  state.todayPagination.currentPage -= 1;
+  renderResults();
+});
+
+elements.todayNext?.addEventListener("click", () => {
+  state.todayPagination.currentPage += 1;
+  renderResults();
+});
+
+elements.openPageSize?.addEventListener("change", () => {
+  const pageSize = Number(elements.openPageSize.value);
+  if (![10, 20, 50, 100].includes(pageSize)) return;
+  state.openPagination.pageSize = pageSize;
+  resetPagination("open");
+  renderOpenNotices();
+});
+
+elements.openPrev?.addEventListener("click", () => {
+  state.openPagination.currentPage -= 1;
+  renderOpenNotices();
+});
+
+elements.openNext?.addEventListener("click", () => {
+  state.openPagination.currentPage += 1;
+  renderOpenNotices();
+});
+
 elements.clearSearch.addEventListener("click", clearSearch);
 elements.emptyReset.addEventListener("click", () => {
   if (state.selectedCategory) {
     state.selectedCategory = null;
+    resetPagination();
     renderCategoryFilters();
     renderResults();
     renderOpenNotices();
@@ -746,6 +827,7 @@ elements.emptyReset.addEventListener("click", () => {
     return;
   }
   state.savedKeywords = [];
+  resetPagination();
   renderSavedKeywords();
   renderResults();
   renderOpenNotices();
