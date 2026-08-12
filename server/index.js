@@ -109,6 +109,57 @@ function classifyCategory(item) {
   return "기타";
 }
 
+const REGION_PATTERNS = [
+  ["서울", /서울(?:특별시|시)?/],
+  ["부산", /부산(?:광역시|시)?/],
+  ["대구", /대구(?:광역시|시)?/],
+  ["인천", /인천(?:광역시|시)?/],
+  ["대전", /대전(?:광역시|시)?/],
+  ["울산", /울산(?:광역시|시)?/],
+  ["세종", /세종(?:특별자치시|시)?/],
+  ["강원", /강원(?:특별자치도|도)?/],
+  ["충북", /충청북도|충북/],
+  ["충남", /충청남도|충남/],
+  ["전북", /전북특별자치도|전라북도|전북/],
+  ["전남", /전라남도|전남/],
+  ["경북", /경상북도|경북/],
+  ["경남", /경상남도|경남/],
+  ["제주", /제주(?:특별자치도|도)?/],
+];
+const REGION_ORDER = [
+  "서울", "부산", "대구", "인천", "광주", "대전", "울산", "세종", "경기",
+  "강원", "충북", "충남", "전북", "전남", "경북", "경남", "제주",
+];
+
+function detectRegions(item) {
+  const hashtagValues = cleanText(item.hashtags).split(",").map((tag) => tag.replace(/^#/, "").trim()).filter(Boolean);
+  const descriptiveText = cleanText([
+    item.pblancNm,
+    item.bsnsSumryCn,
+    item.jrsdInsttNm,
+    item.excInsttNm,
+  ].join(" "));
+  const fullText = cleanText(`${hashtagValues.join(" ")} ${descriptiveText}`);
+  const regions = new Set();
+
+  REGION_PATTERNS.forEach(([region, pattern]) => {
+    if (pattern.test(fullText) || hashtagValues.some((tag) => pattern.test(tag))) regions.add(region);
+  });
+
+  const hasGyeonggiGwangju = /경기(?:도)?\s*광주(?:시)?|경기광주/.test(fullText);
+  const hasGyeonggi = hasGyeonggiGwangju
+    || /경기도|경기\s*(?:지역|소재|도내|권)/.test(fullText)
+    || hashtagValues.some((tag) => /^(?:경기|경기도|경기광주)$/.test(tag));
+  if (hasGyeonggi) regions.add("경기");
+
+  const textWithoutGyeonggiGwangju = fullText.replace(/경기(?:도)?\s*광주(?:시)?|경기광주/g, " ");
+  const hasGwangju = /광주(?:광역시|시)?/.test(textWithoutGyeonggiGwangju)
+    || hashtagValues.some((tag) => /^(?:광주|광주광역시)$/.test(tag));
+  if (hasGwangju) regions.add("광주");
+
+  return regions.size ? REGION_ORDER.filter((region) => regions.has(region)) : ["전국"];
+}
+
 function getItems(body) {
   const items = body?.items;
   if (Array.isArray(items)) return items;
@@ -148,6 +199,7 @@ function normalizeNotice(item) {
     ministry: cleanText(item.jrsdInsttNm) || "소관기관 확인 필요",
     agency: cleanText(item.excInsttNm),
     category: classifyCategory(item),
+    regions: detectRegions(item),
     sources: ["dataGoKr"],
     applyName: cleanText(item.excInsttNm) || "기업마당 원문 공고",
     applyUrl,

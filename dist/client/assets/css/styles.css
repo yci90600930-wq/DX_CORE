@@ -939,6 +939,40 @@ input::placeholder {
   outline-offset: -4px;
 }
 
+.notice-region-list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.compact-notice-button .notice-region-list {
+  margin-top: 7px;
+}
+
+.notice-region-badge {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  min-width: 0;
+  padding: 3px 7px;
+  overflow-wrap: anywhere;
+  color: var(--teal);
+  background: var(--soft);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.4;
+  text-align: left;
+  white-space: normal;
+}
+
 .list-pagination,
 .pagination-toolbar {
   display: flex;
@@ -1913,6 +1947,11 @@ input::placeholder {
     font-size: 13px;
   }
 
+  .notice-region-list {
+    width: 100%;
+    align-items: flex-start;
+  }
+
   .notice-card-button {
     padding: 18px 14px;
   }
@@ -2036,6 +2075,15 @@ input::placeholder {
   .pagination-controls button {
     width: 100%;
     min-width: 0;
+  }
+
+  .notice-region-list {
+    gap: 4px;
+  }
+
+  .notice-region-badge {
+    max-width: 100%;
+    font-size: 9px;
   }
 
   .page-status,

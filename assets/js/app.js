@@ -16,6 +16,11 @@ const CATEGORY_CATALOG = {
   other: "기타",
 };
 
+const REGION_CATALOG = new Set([
+  "전국", "서울", "부산", "대구", "인천", "광주", "대전", "울산", "세종",
+  "경기", "강원", "충북", "충남", "전북", "전남", "경북", "경남", "제주",
+]);
+
 const minute = 60 * 1000;
 const hour = 60 * minute;
 const NOTICE_API_URL = window.location.protocol === "file:"
@@ -349,7 +354,18 @@ function createCompactNoticeItem(notice) {
   button.className = "compact-notice-button";
   button.dataset.noticeId = notice.id;
   button.setAttribute("aria-label", `${notice.title} 상세 보기`);
-  button.textContent = notice.title;
+  const regionBadges = document.createElement("span");
+  regionBadges.className = "notice-region-list";
+  notice.regions.forEach((region) => {
+    const badge = document.createElement("span");
+    badge.className = "notice-region-badge";
+    badge.textContent = region;
+    regionBadges.append(badge);
+  });
+  const title = document.createElement("span");
+  title.className = "compact-notice-title";
+  title.textContent = notice.title;
+  button.append(regionBadges, title);
   item.append(button);
 
   return item;
@@ -461,6 +477,10 @@ function isNoticePayload(value) {
     && typeof value.applicationPeriod === "string"
     && typeof value.ministry === "string"
     && typeof value.category === "string"
+    && Array.isArray(value.regions) && value.regions.length > 0
+    && value.regions.every((region) => typeof region === "string" && REGION_CATALOG.has(region))
+    && new Set(value.regions).size === value.regions.length
+    && (!value.regions.includes("전국") || value.regions.length === 1)
     && typeof value.applyName === "string"
     && typeof value.applyUrl === "string"
     && typeof value.originalUrl === "string"
@@ -553,6 +573,7 @@ function renderDetail(notice) {
 
       <dl class="detail-info-grid">
         <div><dt>최종 관리 부처</dt><dd>${escapeHtml(notice.ministry)}</dd></div>
+        <div><dt>지원 지역</dt><dd>${notice.regions.map(escapeHtml).join(", ")}</dd></div>
         <div><dt>사업 접수 기간</dt><dd>${escapeHtml(notice.applicationPeriod)}</dd></div>
         <div><dt>접수 사이트</dt><dd>${escapeHtml(notice.applyName)}</dd></div>
       </dl>
