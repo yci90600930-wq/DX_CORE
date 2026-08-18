@@ -55,6 +55,10 @@ const state = {
   savedKeywords: [],
   searchKeywords: [],
   currentUser: null,
+  companyProfiles: [],
+  companyMatches: [],
+  selectedCompanyProfileId: "",
+  searchMode: "general",
   selectedCategory: null,
   selectedRegion: null,
   refreshMinutes: 30,
@@ -65,6 +69,7 @@ const state = {
   dataStatus: "loading",
   todayPagination: { pageSize: 10, currentPage: 1 },
   openPagination: { pageSize: 10, currentPage: 1 },
+  companyPagination: { pageSize: 10, currentPage: 1 },
 };
 
 const elements = {
@@ -111,6 +116,22 @@ const elements = {
   signoutButton: document.querySelector("#signout-button"),
   keywordStorageBadge: document.querySelector("#keyword-storage-badge"),
   dataStatus: document.querySelector("#data-status"),
+  searchModeSwitch: document.querySelector("#search-mode-switch"),
+  generalModeButton: document.querySelector("#general-search-mode-button"),
+  companyModeButton: document.querySelector("#company-search-mode-button"),
+  generalSearchWorkspace: document.querySelector("#general-search-workspace"),
+  resultsSection: document.querySelector("#results-section"),
+  openNoticesSection: document.querySelector("#open-notices-section"),
+  companySearchWorkspace: document.querySelector("#company-search-workspace"),
+  companySearchForm: document.querySelector("#company-search-form"),
+  companySearchSelect: document.querySelector("#company-search-select"),
+  companySearchStatus: document.querySelector("#company-search-status"),
+  companySearchResults: document.querySelector("#company-search-results"),
+  companyPagination: document.querySelector("#company-pagination"),
+  companyPageSize: document.querySelector("#company-page-size"),
+  companyPrev: document.querySelector("#company-prev"),
+  companyPageStatus: document.querySelector("#company-page-status"),
+  companyNext: document.querySelector("#company-next"),
 };
 
 function normalizeText(value) {
@@ -293,6 +314,150 @@ function renderAccountState() {
   elements.emptyReset.textContent = isSignedIn ? "관심 키워드 수정" : "오늘 공고 전체 보기";
 }
 
+function setSearchMode(mode, { focus = false } = {}) {
+  state.searchMode = mode === "company" ? "company" : "general";
+  const isCompany = state.searchMode === "company";
+  elements.generalModeButton?.setAttribute("aria-pressed", String(!isCompany));
+  elements.companyModeButton?.setAttribute("aria-pressed", String(isCompany));
+  if (elements.generalSearchWorkspace) elements.generalSearchWorkspace.hidden = isCompany;
+  if (elements.resultsSection) elements.resultsSection.hidden = isCompany;
+  if (elements.openNoticesSection) elements.openNoticesSection.hidden = isCompany;
+  if (elements.companySearchWorkspace) elements.companySearchWorkspace.hidden = !isCompany;
+  if (focus) (isCompany ? elements.companySearchSelect : elements.searchInput)?.focus();
+}
+
+function renderCompanyProfiles() {
+  if (!elements.companySearchSelect) return;
+  const current = state.selectedCompanyProfileId || elements.companySearchSelect.value;
+  elements.companySearchSelect.replaceChildren(new Option("업체를 선택하세요", ""));
+  state.companyProfiles.forEach((profile) => {
+    elements.companySearchSelect.append(new Option(`${profile.company_name} · ${profile.head_office_region}`, profile.id));
+  });
+  const requested = new URLSearchParams(window.location.search).get("profile");
+  const nextId = [requested, current].find((id) => id && state.companyProfiles.some((profile) => profile.id === id)) || "";
+  elements.companySearchSelect.value = nextId;
+  state.selectedCompanyProfileId = nextId;
+  if (!state.currentUser) {
+    elements.companySearchStatus.innerHTML = '회사 맞춤 검색은 로그인 후 사용할 수 있습니다. <a href="login.html">로그인하기</a>';
+  } else if (!state.companyProfiles.length) {
+    elements.companySearchStatus.innerHTML = '저장된 업체가 없습니다. <a href="company.html">기업정보를 먼저 입력해 주세요.</a>';
+  } else {
+    elements.companySearchStatus.textContent = "업체를 선택하고 맞춤 지원사업을 찾아보세요.";
+  }
+}
+
+async function loadCompanyProfiles() {
+  try {
+    state.companyProfiles = await window.DXAuth.loadCompanyProfiles();
+    renderCompanyProfiles();
+    if (state.searchMode === "company" && state.selectedCompanyProfileId && notices.length) runCompanySearch();
+  } catch (error) {
+    state.companyProfiles = [];
+    renderCompanyProfiles();
+    elements.companySearchStatus.textContent = `기업정보를 불러오지 못했습니다: ${translateAuthError(error)}`;
+  }
+}
+
+function conditionText(item) {
+  return item?.reason || item?.rule?.evidence || "조건을 확인해 주세요.";
+}
+
+function createConditionList(title, items, emptyText) {
+  const content = items.length
+    ? `<ul>${items.slice(0, 6).map((item) => `<li>${escapeHtml(conditionText(item))}</li>`).join("")}</ul>`
+    : `<p>${escapeHtml(emptyText)}</p>`;
+  return `<section><h4>${escapeHtml(title)}</h4>${content}</section>`;
+}
+
+function createCompanyMatchCard(match) {
+  const { notice, evaluation } = match;
+  const article = document.createElement("article");
+  article.className = "company-match-card";
+  article.dataset.status = evaluation.status.toLowerCase();
+  const statusLabel = {
+    ELIGIBLE: "지원 가능",
+    CHECK_REQUIRED: "조건 확인 필요",
+    NOT_ELIGIBLE: "지원 어려움",
+  }[evaluation.status];
+  const recommendation = evaluation.reasons.filter(Boolean).slice(0, 3).join(" ") || "입력한 기업정보와 공고 조건을 비교했습니다.";
+  article.innerHTML = `
+    <div class="company-match-heading">
+      <div>
+        <p class="section-kicker">${escapeHtml(notice.ministry)} · ${escapeHtml(notice.agency || notice.applyName)}</p>
+        <h3>${escapeHtml(notice.title)}</h3>
+        <p>${escapeHtml(notice.applicationPeriod)}</p>
+      </div>
+      <div class="score-summary" data-score="${evaluation.totalScore}">
+        <strong>${evaluation.totalScore}<span>점</span></strong>
+        <span>${escapeHtml(evaluation.grade)}</span>
+        <b>${escapeHtml(statusLabel)}</b>
+      </div>
+    </div>
+    <div class="score-breakdown" aria-label="항목별 적합도 점수">
+      ${evaluation.breakdown.map((item) => `<div class="score-breakdown-item"><span>${escapeHtml(item.label)}</span><progress value="${item.score}" max="${item.weight}"></progress><b>${item.score}/${item.weight}</b><small>${escapeHtml(item.reason)}</small></div>`).join("")}
+    </div>
+    <section class="company-match-reason"><h4>추천 이유</h4><p>${escapeHtml(recommendation)}</p></section>
+    <div class="company-condition-grid">
+      ${createConditionList("충족 조건", evaluation.matched, "명확하게 확인된 충족 조건이 없습니다.")}
+      ${createConditionList("확인 필요 조건", evaluation.unknown, "추가 확인이 필요한 조건이 없습니다.")}
+      ${createConditionList("미충족 조건", evaluation.unmatched, "명확한 미충족 조건이 없습니다.")}
+      ${createConditionList("우대 조건", evaluation.preferred.matched, "확인된 우대 조건이 없습니다.")}
+    </div>
+    <section class="company-match-support"><h4>주요 지원내용</h4><p>${escapeHtml(notice.summary)}</p></section>
+    <div class="company-match-actions">
+      <button type="button" data-company-notice-id="${escapeHtml(notice.id)}">상세보기</button>
+      <a href="${escapeHtml(notice.originalUrl)}" target="_blank" rel="noopener noreferrer">원문보기</a>
+      <a href="${escapeHtml(notice.applyUrl)}" target="_blank" rel="noopener noreferrer">신청하기</a>
+    </div>`;
+  return article;
+}
+
+function renderCompanyMatches() {
+  if (!elements.companySearchResults) return;
+  elements.companySearchResults.replaceChildren();
+  const page = getPage(state.companyMatches, state.companyPagination);
+  page.items.forEach((match) => elements.companySearchResults.append(createCompanyMatchCard(match)));
+  const count = state.companyMatches.length;
+  elements.companyPagination.hidden = count === 0;
+  renderPagination(state.companyPagination, count, {
+    pageSize: elements.companyPageSize,
+    prev: elements.companyPrev,
+    status: elements.companyPageStatus,
+    next: elements.companyNext,
+  });
+  if (!count) elements.companySearchResults.innerHTML = '<div class="empty-state"><h3>맞춤 결과가 없어요</h3><p>기업정보와 현재 접수 중인 공고를 다시 확인해 주세요.</p></div>';
+}
+
+function runCompanySearch() {
+  const profileId = elements.companySearchSelect?.value;
+  const profile = state.companyProfiles.find((item) => item.id === profileId);
+  if (!profile) {
+    elements.companySearchStatus.textContent = "검색할 업체를 선택해 주세요.";
+    elements.companySearchSelect?.focus();
+    return;
+  }
+  if (!window.DXEligibilityEngine) {
+    elements.companySearchStatus.textContent = "적합도 판정 기능을 불러오지 못했습니다.";
+    return;
+  }
+  state.selectedCompanyProfileId = profileId;
+  state.companyPagination.currentPage = 1;
+  const evaluationAt = state.fetchedAt || new Date().toISOString();
+  state.companyMatches = getOpenNotices().map(({ notice }) => {
+    const structured = window.DXEligibilityEngine.extractRules(notice);
+    return { notice, evaluation: window.DXEligibilityEngine.matchEligibility(profile, notice, structured, { evaluationAt }) };
+  }).sort((left, right) => {
+    const statusOrder = { ELIGIBLE: 0, CHECK_REQUIRED: 1, NOT_ELIGIBLE: 2 };
+    return statusOrder[left.evaluation.status] - statusOrder[right.evaluation.status]
+      || right.evaluation.totalScore - left.evaluation.totalScore
+      || new Date(right.notice.registeredAt) - new Date(left.notice.registeredAt);
+  });
+  const eligibleCount = state.companyMatches.filter(({ evaluation }) => evaluation.status === "ELIGIBLE").length;
+  const checkCount = state.companyMatches.filter(({ evaluation }) => evaluation.status === "CHECK_REQUIRED").length;
+  elements.companySearchStatus.textContent = `${profile.company_name}: 지원 가능 ${eligibleCount}건, 조건 확인 필요 ${checkCount}건, 전체 ${state.companyMatches.length}건을 적합도 순으로 표시합니다.`;
+  renderCompanyMatches();
+}
+
 async function loadAccountKeywords() {
   try {
     const keywords = await window.DXAuth.loadKeywords();
@@ -309,6 +474,7 @@ async function loadAccountKeywords() {
 async function handleAuthChange({ event, user }) {
   if (event === "UNCONFIGURED") {
     renderAccountState();
+    renderCompanyProfiles();
     return;
   }
 
@@ -331,13 +497,18 @@ async function handleAuthChange({ event, user }) {
     renderResults();
     renderOpenNotices();
     await loadAccountKeywords();
+    await loadCompanyProfiles();
     if (event !== "INITIAL_SESSION") showToast("로그인했습니다. 계정의 관심 키워드를 불러왔어요.");
   } else if (!nextUserId && previousUserId) {
     state.savedKeywords = [];
+    state.companyProfiles = [];
+    state.companyMatches = [];
     resetPagination();
     renderSavedKeywords();
     renderResults();
     renderOpenNotices();
+    renderCompanyProfiles();
+    renderCompanyMatches();
     showToast("로그아웃했습니다.");
   }
 }
@@ -546,6 +717,10 @@ function isNoticePayload(value) {
     && typeof value.summary === "string"
     && typeof value.registeredAt === "string"
     && typeof value.applicationPeriod === "string"
+    && (value.applicationStart === null || typeof value.applicationStart === "string")
+    && (value.applicationEnd === null || typeof value.applicationEnd === "string")
+    && typeof value.supportField === "string"
+    && typeof value.method === "string"
     && typeof value.ministry === "string"
     && typeof value.category === "string"
     && Number.isInteger(value.viewCount) && value.viewCount >= 0
@@ -582,6 +757,7 @@ async function collectNotices({ announce = false, force = false } = {}) {
     renderResults();
     renderOpenNotices();
     renderPeriod();
+    if (state.selectedCompanyProfileId) runCompanySearch();
     showDetailFromHash();
     if (announce) showToast(`공식 공고 ${notices.length}건을 다시 확인했어요.`);
   } catch (error) {
@@ -596,6 +772,7 @@ async function collectNotices({ announce = false, force = false } = {}) {
     renderResults();
     renderOpenNotices();
     renderPeriod();
+    if (state.selectedCompanyProfileId) runCompanySearch();
     if (announce) showToast("공식 공고를 다시 확인하지 못했습니다.");
   }
 }
@@ -796,6 +973,49 @@ function showToast(message) {
   elements.toast.classList.add("visible");
   state.toastTimer = window.setTimeout(() => elements.toast.classList.remove("visible"), 2600);
 }
+
+elements.searchModeSwitch?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-search-mode]");
+  if (!button) return;
+  setSearchMode(button.dataset.searchMode, { focus: true });
+});
+
+elements.companySearchForm?.addEventListener("submit", (event) => {
+  event.preventDefault();
+  runCompanySearch();
+});
+
+elements.companySearchSelect?.addEventListener("change", () => {
+  state.selectedCompanyProfileId = elements.companySearchSelect.value;
+  state.companyMatches = [];
+  renderCompanyMatches();
+  elements.companySearchStatus.textContent = state.selectedCompanyProfileId
+    ? "맞춤 지원사업 찾기를 눌러 결과를 확인하세요."
+    : "검색할 업체를 선택해 주세요.";
+});
+
+elements.companySearchResults?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-company-notice-id]");
+  if (button) window.location.hash = `notice=${encodeURIComponent(button.dataset.companyNoticeId)}`;
+});
+
+elements.companyPageSize?.addEventListener("change", () => {
+  const pageSize = Number(elements.companyPageSize.value);
+  if (![10, 20, 50, 100].includes(pageSize)) return;
+  state.companyPagination.pageSize = pageSize;
+  state.companyPagination.currentPage = 1;
+  renderCompanyMatches();
+});
+
+elements.companyPrev?.addEventListener("click", () => {
+  state.companyPagination.currentPage -= 1;
+  renderCompanyMatches();
+});
+
+elements.companyNext?.addEventListener("click", () => {
+  state.companyPagination.currentPage += 1;
+  renderCompanyMatches();
+});
 
 elements.searchForm.addEventListener("submit", (event) => {
   event.preventDefault();
@@ -1030,6 +1250,8 @@ renderSavedKeywords();
 renderResults();
 renderOpenNotices();
 renderAccountState();
+renderCompanyProfiles();
+setSearchMode(new URLSearchParams(window.location.search).get("mode") === "company" ? "company" : "general");
 scheduleRefresh();
 showDetailFromHash();
 const navigationEntry = performance.getEntriesByType?.("navigation")?.[0];

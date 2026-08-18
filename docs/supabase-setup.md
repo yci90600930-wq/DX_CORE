@@ -5,7 +5,7 @@
 ## 1. Supabase 프로젝트 생성
 
 1. Supabase에서 새 프로젝트를 만듭니다.
-2. SQL Editor에서 `supabase/schema.sql` 전체를 실행합니다.
+2. SQL Editor에서 `supabase/schema.sql` 전체를 실행합니다. 기존 프로젝트도 다시 실행하면 관심 키워드 테이블은 유지되고 여러 업체용 `company_profiles` 테이블과 RLS 정책이 추가됩니다.
 3. Authentication의 Email provider가 활성화되어 있는지 확인합니다.
 4. 이메일 확인 기능은 운영 환경에서 활성화합니다.
 
@@ -43,5 +43,7 @@ Secret key와 `service_role` key는 브라우저 설정이나 Git 저장소에 �
 - 로그인과 로그아웃
 - 비밀번호 재설정
 - 사용자별 관심 키워드 분리
+- 사용자별 여러 업체 생성·수정·삭제
+- 다른 사용자의 업체 정보 조회·변경 차단
 - RLS 정책 적용
 - 운영용 SMTP 연결

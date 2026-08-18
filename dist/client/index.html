@@ -24,6 +24,7 @@
     <script src="assets/js/auth.js" defer></script>
     <script src="assets/js/light-rays.js" defer></script>
     <script src="assets/js/text-loop.js" defer></script>
+    <script src="assets/js/eligibility-engine.js" defer></script>
     <script src="assets/js/app.js" defer></script>
   </head>
   <body>
@@ -127,7 +128,61 @@
           </section>
         </div>
 
-        <section class="search-workspace" aria-labelledby="search-heading">
+        <nav id="search-mode-switch" class="search-mode-switch" aria-label="지원사업 검색 방식">
+          <button
+            id="general-search-mode-button"
+            type="button"
+            data-search-mode="general"
+            aria-pressed="true"
+            aria-controls="general-search-workspace results-section open-notices-section"
+          >
+            일반 지원사업 검색
+          </button>
+          <button
+            id="company-search-mode-button"
+            type="button"
+            data-search-mode="company"
+            aria-pressed="false"
+            aria-controls="company-search-workspace"
+          >
+            우리 회사 지원사업 찾기
+          </button>
+        </nav>
+
+        <section id="company-search-workspace" class="company-search-workspace" aria-labelledby="company-search-heading" hidden>
+          <div class="workspace-topline">
+            <div>
+              <p class="section-kicker">회사 맞춤 검색</p>
+              <h2 id="company-search-heading">우리 회사에 맞는 지원사업을 찾아보세요</h2>
+            </div>
+            <a class="company-manage-link" href="company.html">기업정보 관리</a>
+          </div>
+          <form id="company-search-form" class="company-search-controls">
+            <label for="company-search-select">검색할 업체</label>
+            <select id="company-search-select" required>
+              <option value="">업체를 선택하세요</option>
+            </select>
+            <button id="company-search-submit" type="submit" aria-controls="company-search-results">맞춤 지원사업 찾기</button>
+          </form>
+          <p id="company-search-status" class="company-search-status" role="status" aria-live="polite"></p>
+          <p class="company-search-disclaimer">자동 판정은 지원 자격 확정이 아닌 입력한 기업정보 기반 추천입니다. 신청 전 원문 공고의 자격요건을 확인해 주세요.</p>
+          <div id="company-pagination" class="pagination-toolbar" aria-label="회사 맞춤 공고 페이지 이동" hidden>
+            <label class="page-size-control" for="company-page-size">페이지당 표시
+              <select id="company-page-size" aria-controls="company-search-results">
+                <option value="10" selected>10개</option><option value="20">20개</option>
+                <option value="50">50개</option><option value="100">100개</option>
+              </select>
+            </label>
+            <div class="pagination-controls">
+              <button id="company-prev" type="button" aria-controls="company-search-results">이전</button>
+              <span id="company-page-status" role="status" aria-live="polite">0 / 0 페이지</span>
+              <button id="company-next" type="button" aria-controls="company-search-results">다음</button>
+            </div>
+          </div>
+          <div id="company-search-results" class="company-search-results" aria-live="polite"></div>
+        </section>
+
+        <section id="general-search-workspace" class="search-workspace" aria-labelledby="search-heading">
           <div class="workspace-topline">
             <div>
               <p class="section-kicker">관심 키워드</p>
@@ -202,7 +257,7 @@
           <p class="search-hint">여러 단어는 쉼표로 구분하세요. 제목 또는 본문에 한 단어만 포함되어도 표시합니다.</p>
         </section>
 
-        <section class="results-section" aria-labelledby="results-title">
+        <section id="results-section" class="results-section" aria-labelledby="results-title">
           <div class="results-toolbar">
             <div>
               <p id="results-eyebrow" class="section-kicker">맞춤 신규 공고</p>
@@ -260,7 +315,7 @@
           </div>
         </section>
 
-        <section class="open-notices-section" aria-labelledby="open-notices-title">
+        <section id="open-notices-section" class="open-notices-section" aria-labelledby="open-notices-title">
           <div class="open-notices-intro">
             <div>
               <p class="section-kicker">접수 기회 전체 보기</p>

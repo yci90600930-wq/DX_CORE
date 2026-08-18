@@ -1,6 +1,6 @@
 const DATA_GO_API_URL = "https://apis.data.go.kr/1421000/bizinfo/pblancBsnsService";
 const DATA_GO_SOURCE_PAGE = "https://www.data.go.kr/data/15157820/openapi.do";
-const ALLOWED_STATIC_PATHS = new Set(["/index.html", "/login.html"]);
+const ALLOWED_STATIC_PATHS = new Set(["/index.html", "/login.html", "/company.html"]);
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const PAGE_SIZE = 100;
 const PAGE_CONCURRENCY = 4;
@@ -54,6 +54,16 @@ function formatPeriod(value) {
   const text = cleanText(value);
   if (!text) return "접수기간 확인 필요";
   return text.replace(/(\d{4})[.-]?(\d{2})[.-]?(\d{2})/g, "$1.$2.$3");
+}
+
+function parseApplicationDates(value) {
+  const text = cleanText(value);
+  const matches = [...text.matchAll(/(\d{4})[.-]?(\d{2})[.-]?(\d{2})/g)];
+  const toDate = (match) => match ? `${match[1]}-${match[2]}-${match[3]}` : null;
+  return {
+    applicationStart: toDate(matches[0]),
+    applicationEnd: /상시|예산\s*소진/.test(text) ? null : toDate(matches.at(-1)),
+  };
 }
 
 function getPeriodEndKey(period) {
@@ -200,6 +210,7 @@ function normalizeNotice(item) {
   const contact = cleanText(item.refrncNm);
   const hashtags = cleanText(item.hashtags).split(",").map((tag) => tag.trim()).filter(Boolean);
   const rawViewCount = Number(item.inqireCo);
+  const { applicationStart, applicationEnd } = parseApplicationDates(item.reqstBeginEndDe);
   const originalUrl = safeHttpUrl(item.pblancUrl);
   const applyUrl = safeHttpUrl(item.rceptEngnHmpgUrl, originalUrl);
   const attachmentFiles = [
@@ -220,6 +231,8 @@ function normalizeNotice(item) {
     registeredAt: toIsoDate(item.creatPnttm),
     updatedAt: toIsoDate(item.updtPnttm || item.creatPnttm),
     applicationPeriod: formatPeriod(item.reqstBeginEndDe),
+    applicationStart,
+    applicationEnd,
     ministry: cleanText(item.jrsdInsttNm) || "소관기관 확인 필요",
     agency: cleanText(item.excInsttNm),
     viewCount: Number.isInteger(rawViewCount) && rawViewCount >= 0 ? rawViewCount : 0,
@@ -230,6 +243,8 @@ function normalizeNotice(item) {
     applyUrl,
     originalUrl,
     target,
+    method,
+    supportField: cleanText(item.pldirSportRealmLclasCodeNm),
     contact,
     hashtags,
     attachments: attachmentFiles.map((file) => file.name),

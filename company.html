@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self'; connect-src 'self' https://*.supabase.co wss://*.supabase.co; img-src 'self' data:; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests"
+    />
+    <meta name="description" content="DX CORE 정부 지원사업 알리미 기업정보 관리" />
+    <title>기업정보 관리 | DX CORE 정부 지원사업 알리미</title>
+    <link rel="stylesheet" href="assets/css/styles.css" />
+    <script
+      src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2"
+      integrity="sha384-B2duOBIryCXbX4eDE4BdJwtNkQMRQde3o6IsjfPW28E6aH1CYE96hHeZRG3zY56O"
+      crossorigin="anonymous"
+      defer
+    ></script>
+    <script src="assets/js/supabase-config.js" defer></script>
+    <script src="assets/js/auth.js" defer></script>
+    <script src="assets/js/eligibility-engine.js" defer></script>
+    <script src="assets/js/company.js" defer></script>
+  </head>
+  <body class="company-page">
+    <a class="skip-link" href="#company-main">본문 바로가기</a>
+
+    <header class="login-header company-header">
+      <div class="login-header-inner">
+        <a class="brand" href="index.html" aria-label="DX CORE 정부 지원사업 알리미 홈">
+          <span class="brand-mark" aria-hidden="true">DX</span>
+          <span class="brand-copy">
+            <strong>DX CORE</strong>
+            <span>정부 지원사업 알리미</span>
+          </span>
+        </a>
+        <a class="login-back-link" href="index.html"><span aria-hidden="true">←</span> 공고로 돌아가기</a>
+      </div>
+    </header>
+
+    <main id="company-main" class="company-main">
+      <section id="company-list-view" class="company-list-view" aria-labelledby="company-list-title">
+        <div class="company-page-heading">
+          <div>
+            <p class="section-kicker">회사 맞춤 검색</p>
+            <h1 id="company-list-title">기업정보 관리</h1>
+            <p>여러 업체의 정보를 저장하고 회사별 지원사업을 찾을 수 있습니다.</p>
+          </div>
+          <button id="company-add-button" type="button" aria-controls="company-form-view">업체 추가</button>
+        </div>
+        <p id="company-list-status" role="status" aria-live="polite"></p>
+        <ul id="company-list" class="company-list" aria-live="polite"></ul>
+        <div id="company-list-empty" class="empty-state" hidden>
+          <span class="empty-icon" aria-hidden="true"></span>
+          <h2>저장된 업체가 없어요</h2>
+          <p>업체 정보를 추가하면 회사 조건에 맞는 지원사업을 찾을 수 있습니다.</p>
+          <button id="company-empty-add-button" type="button" aria-controls="company-form-view">첫 업체 추가하기</button>
+        </div>
+      </section>
+
+      <section id="company-form-view" class="company-form-view" aria-labelledby="company-form-title" hidden>
+        <div class="company-page-heading">
+          <div>
+            <p class="section-kicker">기업정보</p>
+            <h1 id="company-form-title">업체 추가</h1>
+            <p>기본정보를 입력한 뒤 상세조건을 확인해 주세요.</p>
+          </div>
+        </div>
+
+        <ol id="company-form-steps" class="company-form-steps" aria-label="기업정보 입력 단계">
+          <li id="company-step-basic-indicator" aria-current="step"><span>1</span> 기본검색</li>
+          <li id="company-step-detail-indicator"><span>2</span> 상세조건 입력</li>
+        </ol>
+
+        <p id="company-form-message" class="company-form-message" role="status" aria-live="polite"></p>
+
+        <form id="company-form" novalidate>
+          <input id="company-id" name="companyId" type="hidden" />
+
+          <fieldset id="company-basic-step" class="company-form-step">
+            <legend>1단계 기본검색</legend>
+            <p class="company-step-description">공고 검색에 사용할 기본 기업정보와 지원 희망 분야를 입력합니다.</p>
+
+            <div class="company-form-grid">
+              <label class="company-field" for="company-name">
+                <span>회사명</span>
+                <input id="company-name" name="companyName" type="text" autocomplete="organization" maxlength="100" required />
+              </label>
+
+              <fieldset class="company-field company-choice-field">
+                <legend>개인/법인</legend>
+                <label><input type="radio" name="businessType" value="individual" required /> 개인</label>
+                <label><input type="radio" name="businessType" value="corporation" /> 법인</label>
+              </fieldset>
+
+              <label class="company-field" for="head-office-region">
+                <span>본사 소재지</span>
+                <select id="head-office-region" name="headOfficeRegion" required>
+                  <option value="">지역을 선택하세요</option>
+                  <option value="seoul">서울</option><option value="busan">부산</option>
+                  <option value="daegu">대구</option><option value="incheon">인천</option>
+                  <option value="gwangju">광주</option><option value="daejeon">대전</option>
+                  <option value="ulsan">울산</option><option value="sejong">세종</option>
+                  <option value="gyeonggi">경기</option><option value="gangwon">강원</option>
+                  <option value="chungbuk">충북</option><option value="chungnam">충남</option>
+                  <option value="jeonbuk">전북</option><option value="jeonnam">전남</option>
+                  <option value="gyeongbuk">경북</option><option value="gyeongnam">경남</option>
+                  <option value="jeju">제주</option>
+                </select>
+              </label>
+
+              <label class="company-field" for="industry">
+                <span>업종</span>
+                <input id="industry" name="industry" type="text" maxlength="100" required />
+              </label>
+
+              <label class="company-field" for="sub-industry">
+                <span>세부업종</span>
+                <input id="sub-industry" name="subIndustry" type="text" maxlength="100" />
+              </label>
+
+              <label class="company-field" for="company-size">
+                <span>기업규모</span>
+                <select id="company-size" name="companySize" required>
+                  <option value="">기업규모를 선택하세요</option>
+                  <option value="micro-business">소상공인</option>
+                  <option value="small-enterprise">소기업</option>
+                  <option value="sme">중소기업</option>
+                  <option value="mid-sized">중견기업</option>
+                </select>
+              </label>
+
+              <label class="company-field" for="established-date">
+                <span>설립일</span>
+                <input id="established-date" name="establishedDate" type="date" required aria-describedby="company-age-help" />
+              </label>
+
+              <div class="company-field company-readonly-field">
+                <span>업력</span>
+                <output id="company-age" for="established-date">설립일을 입력해 주세요</output>
+                <small id="company-age-help">입력한 설립일을 기준으로 자동 계산합니다.</small>
+              </div>
+
+              <label class="company-field" for="employee-count">
+                <span>종업원 수</span>
+                <span class="company-number-input"><input id="employee-count" name="employeeCount" type="number" inputmode="numeric" min="0" step="1" /><span>명</span></span>
+              </label>
+
+              <label class="company-field" for="annual-revenue">
+                <span>매출액</span>
+                <span class="company-number-input"><input id="annual-revenue" name="annualRevenue" type="number" inputmode="numeric" min="0" step="1" aria-describedby="annual-revenue-help" /><span>만원</span></span>
+                <small id="annual-revenue-help">만원 단위로 입력해 주세요.</small>
+              </label>
+            </div>
+
+            <fieldset class="company-check-group">
+              <legend>지원희망 <span>복수선택 가능</span></legend>
+              <div class="company-check-grid">
+                <label><input type="checkbox" name="supportInterests" value="policy-fund" /> 정책자금</label>
+                <label><input type="checkbox" name="supportInterests" value="rnd" /> R&amp;D</label>
+                <label><input type="checkbox" name="supportInterests" value="smart-factory" /> 스마트공장</label>
+                <label><input type="checkbox" name="supportInterests" value="ai-dx" /> AI/DX</label>
+                <label><input type="checkbox" name="supportInterests" value="automation" /> 자동화</label>
+                <label><input type="checkbox" name="supportInterests" value="export" /> 수출</label>
+                <label><input type="checkbox" name="supportInterests" value="market" /> 판로</label>
+                <label><input type="checkbox" name="supportInterests" value="workforce" /> 인력</label>
+                <label><input type="checkbox" name="supportInterests" value="facility" /> 시설/설비</label>
+                <label><input type="checkbox" name="supportInterests" value="certification" /> 인증</label>
+                <label><input type="checkbox" name="supportInterests" value="consulting" /> 컨설팅</label>
+                <label><input type="checkbox" name="supportInterests" value="esg-carbon" /> ESG/탄소중립</label>
+                <label><input type="checkbox" name="supportInterests" value="startup" /> 창업</label>
+              </div>
+            </fieldset>
+
+            <div class="company-form-actions">
+              <button id="company-form-cancel" type="button">목록으로</button>
+              <button id="company-basic-save-button" type="button">기본정보만 저장</button>
+              <button id="company-next-step" class="primary" type="button" aria-controls="company-detail-step">상세조건 입력</button>
+            </div>
+          </fieldset>
+
+          <fieldset id="company-detail-step" class="company-form-step" hidden>
+            <legend>2단계 상세조건 입력</legend>
+            <p class="company-step-description">기업 특성과 정부지원 이력을 선택해 주세요.</p>
+
+            <label class="company-field" for="factory-region">
+              <span>공장 소재지</span>
+              <select id="factory-region" name="factoryRegion">
+                <option value="none">공장 없음</option>
+                <option value="seoul">서울</option><option value="busan">부산</option>
+                <option value="daegu">대구</option><option value="incheon">인천</option>
+                <option value="gwangju">광주</option><option value="daejeon">대전</option>
+                <option value="ulsan">울산</option><option value="sejong">세종</option>
+                <option value="gyeonggi">경기</option><option value="gangwon">강원</option>
+                <option value="chungbuk">충북</option><option value="chungnam">충남</option>
+                <option value="jeonbuk">전북</option><option value="jeonnam">전남</option>
+                <option value="gyeongbuk">경북</option><option value="gyeongnam">경남</option>
+                <option value="jeju">제주</option>
+              </select>
+            </label>
+
+            <fieldset class="company-detail-group">
+              <legend>기업특성</legend>
+              <div class="company-trait-grid">
+                <fieldset><legend>제조기업</legend><label><input type="radio" name="isManufacturer" value="true" /> 예</label><label><input type="radio" name="isManufacturer" value="false" /> 아니오</label><label><input type="radio" name="isManufacturer" value="unknown" checked /> 모름</label></fieldset>
+                <fieldset><legend>공장등록</legend><label><input type="radio" name="hasFactoryRegistration" value="true" /> 예</label><label><input type="radio" name="hasFactoryRegistration" value="false" /> 아니오</label><label><input type="radio" name="hasFactoryRegistration" value="unknown" checked /> 모름</label></fieldset>
+                <fieldset><legend>수출</legend><label><input type="radio" name="isExporter" value="true" /> 예</label><label><input type="radio" name="isExporter" value="false" /> 아니오</label><label><input type="radio" name="isExporter" value="unknown" checked /> 모름</label></fieldset>
+                <label class="company-field" for="export-amount"><span>수출액</span><span class="company-number-input"><input id="export-amount" name="exportAmount" type="number" inputmode="numeric" min="0" step="1" disabled /><span>만원</span></span></label>
+                <fieldset><legend>기업부설연구소</legend><label><input type="radio" name="hasResearchInstitute" value="true" /> 예</label><label><input type="radio" name="hasResearchInstitute" value="false" /> 아니오</label><label><input type="radio" name="hasResearchInstitute" value="unknown" checked /> 모름</label></fieldset>
+                <fieldset><legend>벤처기업</legend><label><input type="radio" name="isVenture" value="true" /> 예</label><label><input type="radio" name="isVenture" value="false" /> 아니오</label><label><input type="radio" name="isVenture" value="unknown" checked /> 모름</label></fieldset>
+                <fieldset><legend>이노비즈</legend><label><input type="radio" name="isInnobiz" value="true" /> 예</label><label><input type="radio" name="isInnobiz" value="false" /> 아니오</label><label><input type="radio" name="isInnobiz" value="unknown" checked /> 모름</label></fieldset>
+                <fieldset><legend>메인비즈</legend><label><input type="radio" name="isMainbiz" value="true" /> 예</label><label><input type="radio" name="isMainbiz" value="false" /> 아니오</label><label><input type="radio" name="isMainbiz" value="unknown" checked /> 모름</label></fieldset>
+                <fieldset><legend>여성기업</legend><label><input type="radio" name="isWomenOwned" value="true" /> 예</label><label><input type="radio" name="isWomenOwned" value="false" /> 아니오</label><label><input type="radio" name="isWomenOwned" value="unknown" checked /> 모름</label></fieldset>
+                <fieldset><legend>장애인기업</legend><label><input type="radio" name="isDisabledOwned" value="true" /> 예</label><label><input type="radio" name="isDisabledOwned" value="false" /> 아니오</label><label><input type="radio" name="isDisabledOwned" value="unknown" checked /> 모름</label></fieldset>
+                <fieldset><legend>사회적기업</legend><label><input type="radio" name="isSocialEnterprise" value="true" /> 예</label><label><input type="radio" name="isSocialEnterprise" value="false" /> 아니오</label><label><input type="radio" name="isSocialEnterprise" value="unknown" checked /> 모름</label></fieldset>
+              </div>
+            </fieldset>
+
+            <fieldset class="company-detail-group">
+              <legend>정부지원</legend>
+              <div class="company-form-grid">
+                <label class="company-field" for="support-experience"><span>정부지원사업 수행 경험</span><select id="support-experience" name="supportExperience"><option value="unknown">확인 필요</option><option value="true">예</option><option value="false">아니오</option></select></label>
+                <label class="company-field" for="same-project-benefit"><span>동일사업 수혜</span><select id="same-project-benefit" name="sameProjectBenefit"><option value="unknown">확인 필요</option><option value="true">예</option><option value="false">아니오</option></select></label>
+                <label class="company-field" for="participation-restriction"><span>참여제한</span><select id="participation-restriction" name="participationRestriction"><option value="unknown">확인 필요</option><option value="true">예</option><option value="false">아니오</option></select></label>
+              </div>
+            </fieldset>
+
+            <div class="company-form-actions">
+              <button id="company-previous-step" type="button" aria-controls="company-basic-step">이전</button>
+              <button id="company-save-button" class="primary" type="submit">기업정보 저장</button>
+            </div>
+          </fieldset>
+        </form>
+      </section>
+    </main>
+
+    <dialog id="company-delete-dialog" aria-labelledby="company-delete-title" aria-describedby="company-delete-description">
+      <form method="dialog">
+        <h2 id="company-delete-title">업체 정보를 삭제할까요?</h2>
+        <p id="company-delete-description">삭제한 기업정보는 되돌릴 수 없습니다.</p>
+        <div class="company-form-actions">
+          <button id="company-delete-cancel" value="cancel">취소</button>
+          <button id="company-delete-confirm" class="danger" value="confirm">삭제</button>
+        </div>
+      </form>
+    </dialog>
+
+    <div id="company-toast" class="toast" role="status" aria-live="polite"></div>
+
+    <template id="company-list-item-template">
+      <li class="company-list-item">
+        <div>
+          <strong class="company-list-name"></strong>
+          <p class="company-list-summary"></p>
+        </div>
+        <div class="company-list-actions">
+          <a class="company-find-link" href="index.html?mode=company">지원사업 찾기</a>
+          <button class="company-edit-button" type="button">수정</button>
+          <button class="company-delete-button" type="button">삭제</button>
+        </div>
+      </li>
+    </template>
+  </body>
+</html>

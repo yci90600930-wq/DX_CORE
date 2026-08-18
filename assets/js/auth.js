@@ -117,6 +117,60 @@
     if (error) throw error;
   }
 
+  const COMPANY_PROFILE_COLUMNS = [
+    "id", "company_name", "entity_type", "company_size", "head_office_region",
+    "factory_region", "industry", "industry_detail", "founded_on",
+    "annual_revenue_krw", "employee_count", "is_manufacturer",
+    "has_factory_registration", "has_export_experience", "export_amount_krw",
+    "has_corporate_research_institute", "is_venture_certified",
+    "is_innobiz_certified", "is_mainbiz_certified", "is_women_owned_certified",
+    "is_disabled_owned_certified", "is_social_enterprise",
+    "has_government_project_experience", "has_same_program_benefit",
+    "has_participation_restriction", "desired_support_types", "profile_step",
+    "created_at", "updated_at",
+  ];
+
+  async function loadCompanyProfiles() {
+    if (!currentUser) return [];
+    const { data, error } = await requireClient()
+      .from("company_profiles")
+      .select(COMPANY_PROFILE_COLUMNS.join(","))
+      .order("updated_at", { ascending: false });
+    if (error) throw error;
+    return data ?? [];
+  }
+
+  async function saveCompanyProfile(profile) {
+    if (!currentUser) throw new Error("AUTH_REQUIRED");
+    const allowed = COMPANY_PROFILE_COLUMNS.filter((column) => !["created_at", "updated_at"].includes(column));
+    const payload = { owner_user_id: currentUser.id };
+    allowed.forEach((column) => {
+      if (Object.hasOwn(profile, column)) payload[column] = profile[column];
+    });
+    const query = requireClient()
+      .from("company_profiles")
+      .upsert(payload, { onConflict: "id" })
+      .select(COMPANY_PROFILE_COLUMNS.join(","))
+      .single();
+    const { data, error } = await query;
+    if (error) throw error;
+    return data;
+  }
+
+  async function deleteCompanyProfile(profileId) {
+    if (!currentUser) throw new Error("AUTH_REQUIRED");
+    const { error } = await requireClient()
+      .from("company_profiles")
+      .delete()
+      .eq("id", profileId)
+      .eq("owner_user_id", currentUser.id);
+    if (error) throw error;
+  }
+
+  function getCurrentUser() {
+    return currentUser;
+  }
+
   function destroy() {
     authSubscription?.unsubscribe();
   }
@@ -126,12 +180,16 @@
     destroy,
     initialize,
     isConfigured: hasUsableConfig,
+    deleteCompanyProfile,
+    getCurrentUser,
+    loadCompanyProfiles,
     loadKeywords,
     removeKeyword,
     resetPassword,
     signIn,
     signOut,
     signUp,
+    saveCompanyProfile,
     updatePassword,
   });
 })();
